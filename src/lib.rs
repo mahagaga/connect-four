@@ -15,8 +15,8 @@ mod tests {
         // drop 7 white Stones in the middle column
         let mut cf = ConnectFour::new();
         for i in 0..7 {
+            //println!("drop {} time", i+1);
             let middle = Box::new(ConnectFourMove { data: Column::Four });
-
             match cf.make_move(&white, middle) {
                 Ok(x) => match x {
                     // should be undecided 3 times
@@ -49,9 +49,31 @@ mod tests {
             _ => assert!(false),
         }
     }
+
+    #[test]
+    fn test_possible_moves() {
+        let mut cf = ConnectFour::new();
+        let p = Player::Black;
+        let pm = cf.possible_moves(&p);
+        assert!(pm.len()==cf.width);
+        assert!(*pm[3].data() == Column::Four);
+
+        for _ in 0..6 {
+            let _ = cf.drop(&p, Column::Four);
+        }
+        let pm:Vec<Box<Move<Column>>> = cf.possible_moves(&p);
+        println!("{:?}", &cf.field);
+        for x in &pm {
+            println!("{:?}", &x.data());
+        }
+        assert!(pm.len()==cf.width-1);
+        assert!(*pm[3].data() == Column::Five);
+    }
 }
 
-#[derive(PartialEq, Eq)]
+// generic game with two players
+
+#[derive(PartialEq, Eq, Debug)]
 pub enum Player {
     Black,
     White,
@@ -82,17 +104,22 @@ pub enum Withdraw {
 }
 
 pub trait Game<T> {
-    fn make_move(&mut self, p: &Player, m: Box<Move<T>>) -> Result<Score, Withdraw>;
     fn new() -> Self;
+    fn possible_moves(&self, p: &Player) -> Vec<Box<Move<T>>>;
+    fn make_move(&mut self, p: &Player, m: Box<Move<T>>) -> Result<Score, Withdraw>;
 }
 
+// specifically Connect Four
 
 pub struct ConnectFour {
     field: Vec<Vec<Option<Player>>>,
+    width: usize,
+    hight: usize,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 pub enum Column {
-    One, Two, Three, Four, Five, Six, Seven,
+    One, Two, Three, Four, Five, Six, Seven, Zero
 }
 
 impl Column {
@@ -105,6 +132,21 @@ impl Column {
             Column::Five => 0x4,
             Column::Six => 0x5,
             Column::Seven => 0x6,
+            // Zero is for making the reverse function from_usize easier to use
+            Column::Zero => 0x99,
+        }
+    }
+
+    fn from_usize(i: usize) -> Self {
+        match i {
+            0x0 => Column::One,
+            0x1 => Column::Two,
+            0x2 => Column::Three,
+            0x3 => Column::Four,
+            0x4 => Column::Five,
+            0x5 => Column::Six,
+            0x6 => Column::Seven,
+            _ => Column::Zero,
         }
     }
 }
@@ -122,45 +164,42 @@ impl Move<Column> for ConnectFourMove {
 impl Game<Column> for ConnectFour {
     fn new() -> Self {
         let mut cf = ConnectFour{
+            width: 7,
+            hight: 6,
             field: Vec::with_capacity(7),
         };
-        for _coln in 0..7 {
-            let mut col:Vec<Option<Player>> = Vec::with_capacity(6);
-            for _celln in 0..6 {
-                col.push(None);
-            }
+        for _coln in 0..cf.width {
+            let mut col:Vec<Option<Player>> = Vec::with_capacity(cf.hight);
             cf.field.push(col);
         };
         cf
     }
 
+    fn possible_moves(&self, _: &Player) -> Vec<Box<Move<Column>>> {
+        let mut allowed: Vec<Box<Move<Column>>> = Vec::new();
+        let mut i:usize = 0;
+        for col in &self.field {
+            if col.len() < self.hight {
+                allowed.push(Box::new(ConnectFourMove {
+                    data: Column::from_usize(i)
+                }));
+            }
+            i += 1;
+        }
+        allowed
+    }
+
     fn make_move(&mut self, p: &Player, mv: Box<Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
-        let mut m: usize = 0;
-
-        // set the first free space in the column to the Player's color
-        for cell in self.field[n].iter() {
-            //println!("{} {}", n, m);
-            match cell {
-                None => {
-                    //println!("none at {}", m);
-                    break;
-                },
-                Some(_other) => {
-                    m += 1;
-                    //println!("other {}", _other);
-                },
-           }
-        }
-        if m == self.field[n].len() {
+        if self.hight == self.field[n].len() {
             // column is obviously already filled to the top
             Err(Withdraw::NotAllowed)
         } else {
-            self.field[n][m] = match p {
+            self.field[n].push(match p {
                 Player::White => Some(Player::White),
                 Player::Black => Some(Player::Black), 
-            };
-            self.get_score(p, n, m)
+            });
+            self.get_score(p, n, self.field[n].len()-1)
         }
     }
 }
@@ -175,7 +214,7 @@ impl ConnectFour {
         // vertical
         let below = self.matching_distance(vec![n,n,n], m, Step::Down, p);
         if below >= 3 {
-            //println!("below {}", below);
+            //println!("{} below {}", below, m);
             return Ok(Score::Won)
         }
 
@@ -219,10 +258,7 @@ impl ConnectFour {
         let mut distance = 1;
         for i in iter.into_iter() {
             let j:usize = match step {
-                Step::Up => { if m+distance>=self.field[i].len() { 
-                                return distance-1; 
-                            }
-                            m+distance },
+                Step::Up => m+distance,
                 Step::Down => { if distance>m {
                                 return distance-1; 
                             }
@@ -230,6 +266,9 @@ impl ConnectFour {
                 Step::Plane => m,
             };
             
+            if j>=self.field[i].len() {
+                return distance-1
+            }
             match &self.field[i][j] {
                 Some(cp) => {
                     if *cp == *p {
@@ -245,5 +284,9 @@ impl ConnectFour {
             }
         }
         distance-1
+    }
+
+    pub fn drop(&mut self, p: &Player, c:Column) -> Result<Score, Withdraw> {
+        self.make_move(&p, Box::new(ConnectFourMove { data: c }))
     }
 }
