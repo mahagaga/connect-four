@@ -86,7 +86,7 @@ mod tests {
             };
         }
         if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 0) {
+                Rc::new(RefCell::new(game)), &white, 0, false) {
             println!("{:?} {:?}", mv.data(), score);
             assert!(Score::Won == score);
             assert!(*mv.data() == Column::Six);
@@ -102,7 +102,7 @@ mod tests {
             };
         }
         if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 1) {
+                Rc::new(RefCell::new(game)), &white, 1, false) {
             println!("{:?} {:?}", mv.data(), score);
             match score {
                 Score::Undecided(p) => assert!(p == 0.5),
@@ -114,7 +114,7 @@ mod tests {
         // first move
         game = ConnectFour::new();
         if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 6) {
+                Rc::new(RefCell::new(game)), &white, 2, true) {
             println!("{:?} {:?}", mv.data(), score);
             match score {
                     Score::Undecided(p) => assert!(p==0.5),
@@ -167,6 +167,7 @@ pub enum Score {
     Lost,
 }
 
+#[derive(Debug)]
 pub enum Withdraw {
     NotAllowed,
 }
@@ -176,13 +177,15 @@ pub trait Game<T> {
     fn make_move(&mut self, p: &Player, m: Rc<Move<T>>) -> Result<Score, Withdraw>;
     fn withdraw_move(&mut self, p: &Player, m: Rc<Move<T>>);
     fn display(&self) -> String;
+    fn evaluate_move(&self, p: &Player, m: Rc<Move<T>>) -> Result<f32, Withdraw>;
 }
 
 pub trait Strategy<T> {
     fn find_best_move(&self, 
             g: Rc<RefCell<Game<T>>>,
             p: &Player,
-            moves_ahead: i32
+            moves_ahead: i32,
+            game_evaluation: bool
         ) -> (Option<Rc<Move<T>>>, Option<Score>) {
         //let mut win_option: Option<Rc<Move<T>>> = None;
         let mut remis_option: Option<Rc<Move<T>>> = None;
@@ -209,12 +212,11 @@ pub trait Strategy<T> {
             g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
         }
         
-        let mut undecided_option: Option<Rc<Move<T>>> = None;
-        let mut undecided_p = 0.0;
+        let mut still_undecided: Vec<(Rc<Move<T>>, f32)> = Vec::new();
         for (undecided, pv) in follow_ups {
             if moves_ahead > 0 {
                 let _ = g.borrow_mut().make_move(p, Rc::clone(&undecided));
-                let (_, advscore) = self.find_best_move(Rc::clone(&g), p.oponent(), moves_ahead-1);
+                let (_, advscore) = self.find_best_move(Rc::clone(&g), p.oponent(), moves_ahead-1, false);
                 match advscore {
                     Some(Score::Won) => { lost_option = Some(Rc::clone(&undecided)); },
                     Some(Score::Remis) => { remis_option = Some(Rc::clone(&undecided)); },
@@ -223,30 +225,44 @@ pub trait Strategy<T> {
                         return (Some(undecided), Some(Score::Won));
                     },
                     Some(Score::Undecided(advpv)) => {
-                        if 1.0-advpv > undecided_p {
-                            undecided_option = Some(Rc::clone(&undecided));
-                            undecided_p = 1.0-advpv;
-                        } else {
-                        }
+                        still_undecided.push((Rc::clone(&undecided), 1.0-advpv));
                     },
                     None => println!("why is here None?"),
                 }
                 g.borrow_mut().withdraw_move(p, Rc::clone(&undecided));
             } else {
-                if pv > undecided_p {
-                    undecided_option = Some(Rc::clone(&undecided));
-                    undecided_p = pv;
-                } else {
+                still_undecided.push((Rc::clone(&undecided), pv));
+            }
+        }
+
+        let mut undecided_option: Option<Rc<Move<T>>> = None;
+        let mut undecided_pv = -1.0;
+        for (undecided, pv) in still_undecided {
+            if game_evaluation {
+                match g.borrow().evaluate_move(p, Rc::clone(&undecided)) {
+                    Ok(ev) => if ev > undecided_pv {
+                        if ev > undecided_pv {
+                            undecided_option = Some(undecided);
+                            undecided_pv = ev;
+                        }
+                    },
+                    Err(e) => println!("what's wrong with {:?}: {:?}", undecided.display(), e),
+                }
+                
+            } else {
+                if pv > undecided_pv {
+                    undecided_option = Some(undecided);
+                    undecided_pv = pv;
                 }
             }
         }
 
         if let Some(undecided) = undecided_option {
             if let Some(remis) = remis_option {
-                if undecided_p >= 0.5 { return (Some(undecided), Some(Score::Undecided(undecided_p))); }
+                if undecided_pv >= 0.5 { return (Some(undecided), Some(Score::Undecided(undecided_pv))); }
                 else { return (Some(remis), Some(Score::Remis)); }
             } else {
-                return (Some(undecided), Some(Score::Undecided(undecided_p)));
+                return (Some(undecided), Some(Score::Undecided(undecided_pv)));
             }
         }
 
@@ -345,6 +361,10 @@ impl Game<Column> for ConnectFour {
     fn withdraw_move(&mut self, p: &Player, mv: Rc<Move<Column>>) {
         let n = mv.data().to_usize();
         self.field[n].pop();
+    }
+
+    fn evaluate_move(&self, p: &Player, mv: Rc<Move<Column>>) -> Result<f32, Withdraw> {
+        Ok(0.0)
     }
 
     fn display(&self) -> String {
