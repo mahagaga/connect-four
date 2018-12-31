@@ -20,7 +20,7 @@ mod tests {
             match cf.make_move(&white, middle) {
                 Ok(x) => match x {
                     // should be undecided 3 times
-                    Score::Undecided(p) => assert!(i<3,i),
+                    Score::Undecided(_p) => assert!(i<3,i),
                     // then won 3 times
                     Score::Won => assert!(i>2,i),
                     _ => assert!(false),
@@ -33,15 +33,15 @@ mod tests {
         // drop 4 stones in a row
         let mut cf = ConnectFour::new();
         match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Four })) {
-            Ok(x) => if let Score::Undecided(p) = x { () } else { assert!(false)},
+            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
             _ => assert!(false),
         }
         match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Two })) {
-            Ok(x) => if let Score::Undecided(p) = x { () } else { assert!(false)},
+            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
             _ => assert!(false),
         }
         match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Five })) {
-            Ok(x) => if let Score::Undecided(p) = x { () } else { assert!(false)},
+            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
             _ => assert!(false),
         }
         match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Three })) {
@@ -358,7 +358,7 @@ impl Game<Column> for ConnectFour {
         }
     }
 
-    fn withdraw_move(&mut self, p: &Player, mv: Rc<Move<Column>>) {
+    fn withdraw_move(&mut self, _p: &Player, mv: Rc<Move<Column>>) {
         let n = mv.data().to_usize();
         self.field[n].pop();
     }
@@ -393,7 +393,7 @@ enum Step {
 }
 
 impl ConnectFour {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut cf = ConnectFour{
             width: 7,
             hight: 6,
