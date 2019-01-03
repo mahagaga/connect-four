@@ -342,7 +342,7 @@ impl Column {
         }
     }
 
-    fn from_usize(i: usize) -> Self {
+    pub fn from_usize(i: usize) -> Self {
         match i {
             0x0 => Column::One,
             0x1 => Column::Two,
@@ -532,9 +532,9 @@ impl ConnectFour {
 }
 
 pub struct ConnectFourStrategy {
-    oscore_koeff: f32,
-    mscore_koeff: f32,
-    nscore_koeff: f32,
+    pub oscore_koeff: f32,
+    pub mscore_koeff: f32,
+    pub nscore_koeff: f32,
 }
 enum Cell {
     M, //my stone
