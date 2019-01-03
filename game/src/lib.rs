@@ -63,7 +63,7 @@ mod tests {
         assert!(*pm[3].data() == Column::Four);
 
         for _ in 0..6 {
-            let _ = cf.drop(&p, Column::Four);
+            let _ = cf.drop_stone(&p, Column::Four);
         }
         let pm:Vec<Rc<Move<Column>>> = cf.possible_moves(&p);
         println!("{:?}", &cf.field);
@@ -87,7 +87,7 @@ mod tests {
         // recognize a winner
         let mut game = ConnectFour::new();
         for _ in 0..3 { 
-            let score = game.drop(&white, Column::Six); 
+            let score = game.drop_stone(&white, Column::Six); 
             match score {
                 Ok(Score::Undecided(p)) => assert!(p == 0.5),
                 _ => assert!(false),
@@ -103,7 +103,7 @@ mod tests {
         // danger awareness
         game = ConnectFour::new();
         for _ in 0..3 { 
-            let score = game.drop(&black, Column::Six); 
+            let score = game.drop_stone(&black, Column::Six); 
             match score {
                 Ok(Score::Undecided(p)) => assert!(p == 0.5),
                 _ => assert!(false),
@@ -141,7 +141,7 @@ mod tests {
         let mut g = ConnectFour::new();
         let black = Player::Black;
         let white = Player::White;
-        let _ = g.drop(&black, Column::Two);
+        let _ = g.drop_stone(&black, Column::Two);
         let mv = ConnectFourMove { data: Column::Five, };
         let s = ConnectFourStrategy  {
              mscore_koeff: 1.0,
@@ -526,7 +526,7 @@ impl ConnectFour {
         distance-1
     }
 
-    pub fn drop(&mut self, p: &Player, c:Column) -> Result<Score, Withdraw> {
+    pub fn drop_stone(&mut self, p: &Player, c:Column) -> Result<Score, Withdraw> {
         self.make_move(&p, Rc::new(ConnectFourMove { data: c }))
     }
 }
@@ -536,6 +536,7 @@ pub struct ConnectFourStrategy {
     pub mscore_koeff: f32,
     pub nscore_koeff: f32,
 }
+
 enum Cell {
     M, //my stone
     O, //opponent's stone

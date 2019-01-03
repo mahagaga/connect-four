@@ -8,8 +8,9 @@ use iron::status;
 
 use iron::Handler;
 
+use std::sync::Mutex;
 struct ConnectFourHandler {
-    cf: ConnectFour,
+    cf: Mutex<ConnectFour>,
     st: ConnectFourStrategy,
 }
 
@@ -44,12 +45,15 @@ impl Handler for ConnectFourHandler {
             let mut answer = String::new();
             match **s {
                 "new" => { 
-                    self.cf = ConnectFour::new(); 
-                    answer = self.cf.display(); 
+                    let mut cf = self.cf.lock().unwrap();
+                    *cf = ConnectFour::new(); 
+                    answer = cf.display(); 
                 },
                 "move" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        answer = self.cf.display();
+                        let mut cf = self.cf.lock().unwrap();
+                        cf.drop_stone(&player, column);
+                        answer = cf.display(); 
                     } else { return Ok(Response::with(status::BadRequest)) }
                 },
                 "withdraw" => {
@@ -82,7 +86,7 @@ fn main() {
     }
 
     let _server = Iron::new(ConnectFourHandler {
-        cf: ConnectFour::new(),
+        cf: Mutex::new(ConnectFour::new()),
         st: ConnectFourStrategy { 
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
