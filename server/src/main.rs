@@ -9,6 +9,9 @@ use iron::status;
 use iron::Handler;
 
 use std::sync::Mutex;
+use std::rc::Rc;
+use std::cell::RefCell;
+
 struct ConnectFourHandler {
     cf: Mutex<ConnectFour>,
     st: ConnectFourStrategy,
@@ -41,49 +44,58 @@ impl Handler for ConnectFourHandler {
             (player, column)
         }
         
+        let mut answer = None;
+
         if let Some(s) = &req.url.path().get(0) {
-            let mut answer = String::new();
+            let mut cf = self.cf.lock().unwrap();
+
             match **s {
                 "new" => { 
-                    let mut cf = self.cf.lock().unwrap();
                     *cf = ConnectFour::new(); 
-                    answer = cf.display(); 
+                    answer = Some(cf.display()); 
                 },
                 "move" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        let mut cf = self.cf.lock().unwrap();
-                        cf.drop_stone(&player, column);
-                        answer = cf.display(); 
-                    } else { return Ok(Response::with(status::BadRequest)) }
+                        if let Ok(_) = cf.drop_stone(&player, column) {
+                            answer = Some(cf.display()); 
+                        }
+                    }
                 },
                 "withdraw" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        //answer = self.cf.display();
-                    } else { return Ok(Response::with(status::BadRequest)) }
+                        if let Ok(_) = cf.make_move(&player, Rc::new(ConnectFourMove{ data: column, })) {
+                            answer = Some(cf.display()); 
+                        }
+                    }
                 },
                 "eval" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        //answer = self.st.eval();
-                    } else { return Ok(Response::with(status::BadRequest)) }
+                        let cfclone = cf.clone();
+                        if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {
+                            answer = Some(format!("{}", eval));
+                        }
+                    }
                 },
                 "best" => {
                     if let (Some(player), _) = readurl(&req) {
-                        //answer = self.st.find_best_move();
-                    } else { return Ok(Response::with(status::BadRequest)) }                    
+                        let cfclone = cf.clone();
+                        if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 4, true) {
+                            if let Ok(_) = cf.make_move(&player, mv) {
+                                answer = Some(cf.display());
+                            }
+                        }
+                    }                    
                 },
-                _ => return Ok(Response::with(status::BadRequest)),
+                _ => (),
             }
-            Ok(Response::with((status::Ok, answer.as_str())))
+        }
+        if let Some(line) = answer {
+            Ok(Response::with((status::Ok, line.as_str())))
         } else { return Ok(Response::with(status::BadRequest)) }
     }
 }
 
 fn main() {
-    let mut cf = ConnectFour::new();
-
-    fn connect_four(_: &mut Request) -> IronResult<Response> {
-        Ok(Response::with((status::Ok, "Hello World!")))
-    }
 
     let _server = Iron::new(ConnectFourHandler {
         cf: Mutex::new(ConnectFour::new()),

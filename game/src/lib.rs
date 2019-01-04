@@ -357,7 +357,7 @@ impl Column {
 }
 
 pub struct ConnectFourMove {
-    data: Column,
+    pub data: Column,
 }
 
 impl Move<Column> for ConnectFourMove {
@@ -441,10 +441,30 @@ impl ConnectFour {
     
     pub fn new() -> Self {
         let mut cf = ConnectFour{
-            field: Vec::with_capacity(7),
+            field: Vec::with_capacity(ConnectFour::width()),
         };
         for _coln in 0..ConnectFour::width() {
             let mut col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
+            cf.field.push(col);
+        };
+        cf
+    }
+
+    pub fn clone(&self) -> ConnectFour {
+        let mut cf = ConnectFour{
+            field: Vec::with_capacity(ConnectFour::width()),
+        };
+        for self_col in &self.field {
+            let mut col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
+            for player_option in self_col {
+                col.push(match player_option {
+                    Some(player) => match player {
+                          Player::White => Some(Player::White),
+                          Player::Black => Some(Player::Black),
+                    }, 
+                    None => None, 
+                });
+            }
             cf.field.push(col);
         };
         cf
@@ -528,6 +548,10 @@ impl ConnectFour {
 
     pub fn drop_stone(&mut self, p: &Player, c:Column) -> Result<Score, Withdraw> {
         self.make_move(&p, Rc::new(ConnectFourMove { data: c }))
+    }
+
+    pub fn undrop_stone(&mut self, p: &Player, c:Column) {
+        self.withdraw_move(&p, Rc::new(ConnectFourMove { data: c }))
     }
 }
 
