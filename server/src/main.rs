@@ -54,20 +54,21 @@ impl Handler for ConnectFourHandler {
 
             match **s {
                 "new" => { 
-                    *cf = ConnectFour::new(); 
-                    answer = Some(cf.display()); 
+                    *cf = ConnectFour::new();
+                    // answer must be proper JSON (", no ') for ajax
+                    answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
                 },
                 "move" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
                         if let Ok(_) = cf.drop_stone(&player, column) {
-                            answer = Some(cf.display()); 
+                            answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
                         }
                     }
                 },
                 "withdraw" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
                         if let Ok(_) = cf.make_move(&player, Rc::new(ConnectFourMove{ data: column, })) {
-                            answer = Some(cf.display()); 
+                            answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
                         }
                     }
                 },
@@ -75,7 +76,7 @@ impl Handler for ConnectFourHandler {
                     if let (Some(player), Some(column)) = readurl(&req) {
                         let cfclone = cf.clone();
                         if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {
-                            answer = Some(format!("{}", eval));
+                            answer = Some(format!("{{ \"evaluation\": {} }}", eval));
                         }
                     }
                 },
@@ -83,9 +84,7 @@ impl Handler for ConnectFourHandler {
                     if let (Some(player), _) = readurl(&req) {
                         let cfclone = cf.clone();
                         if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 4, true) {
-                            if let Ok(_) = cf.make_move(&player, mv) {
-                                answer = Some(cf.display());
-                            }
+                            answer = Some(format!("{{ \"bestmove\": {} }}", mv.data().to_usize()));
                         }
                     }                    
                 },
@@ -94,6 +93,7 @@ impl Handler for ConnectFourHandler {
         }
         if let Some(line) = answer {
             let mut response = Response::with((status::Ok, line.as_str()));
+            // allow all origins so the service can be called from javascript
             response.headers.set(AccessControlAllowOrigin::Any);
             Ok(response)
         } else { return Ok(Response::with(status::BadRequest)) }

@@ -328,7 +328,7 @@ pub enum Column {
 }
 
 impl Column {
-    fn to_usize(&self) -> usize {
+    pub fn to_usize(&self) -> usize {
         match &self {
             Column::One => 0x0,
             Column::Two => 0x1,
