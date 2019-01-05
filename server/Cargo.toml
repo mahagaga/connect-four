@@ -5,4 +5,5 @@ authors = ["scem <esc@mahagaga.ch>"]
 
 [dependencies]
 iron = "0.6.*"
+hyper = "*"
 game = { path = "../game" }

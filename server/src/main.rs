@@ -2,6 +2,7 @@ extern crate game;
 use game::*;
 
 extern crate iron;
+extern crate hyper;
 
 use iron::prelude::*;
 use iron::status;
@@ -16,6 +17,8 @@ struct ConnectFourHandler {
     cf: Mutex<ConnectFour>,
     st: ConnectFourStrategy,
 }
+
+use hyper::header::AccessControlAllowOrigin;
 
 impl Handler for ConnectFourHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
@@ -90,7 +93,9 @@ impl Handler for ConnectFourHandler {
             }
         }
         if let Some(line) = answer {
-            Ok(Response::with((status::Ok, line.as_str())))
+            let mut response = Response::with((status::Ok, line.as_str()));
+            response.headers.set(AccessControlAllowOrigin::Any);
+            Ok(response)
         } else { return Ok(Response::with(status::BadRequest)) }
     }
 }
