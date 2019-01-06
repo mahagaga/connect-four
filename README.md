@@ -21,9 +21,6 @@ sudo apt install apache2
 ```
 git clone https://github.com/scem/connect-four.git
 git clone https://github.com/scem/connect-four-js.git
-cd connect-four-js.git
-checkout develop
-cd -
 ```
 
 * then you need rust installed
