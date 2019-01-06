@@ -568,6 +568,7 @@ enum Cell {
 }
 
 impl ConnectFourStrategy {
+    #[allow(dead_code)]
     fn display_efield(&self, ef: &Vec<Vec<Cell>>) {
         for j in (0..ConnectFour::height()).rev() {
             for i in 0..ConnectFour::width() {

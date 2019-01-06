@@ -12,9 +12,10 @@ use iron::Handler;
 use std::sync::Mutex;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 struct ConnectFourHandler {
-    cf: Mutex<ConnectFour>,
+    cfm: Mutex<HashMap<i32,ConnectFour>>,
     st: ConnectFourStrategy,
 }
 
@@ -49,51 +50,65 @@ impl Handler for ConnectFourHandler {
         
         let mut answer = None;
 
+        let mut evaluation_clone:Option<ConnectFour> = None;
+        let mut best_move_clone:Option<ConnectFour> = None;
+
         if let Some(s) = &req.url.path().get(0) {
-            let mut cf = self.cf.lock().unwrap();
+
+            let mut cfm = self.cfm.lock().unwrap();
 
             match **s {
-                "new" => { 
-                    *cf = ConnectFour::new();
-                    // answer must be proper JSON (", no ') for ajax
-                    answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
+                "new" => {
+                    (*cfm).insert(1, ConnectFour::new());
+                    // answer must be proper JSON (", no ', \\n, no \n) for ajax
+                    answer = Some(format!("{{ \"field\": \"{}\" }}", (*cfm).get(&1).unwrap().display().replace("\n", "\\n")));
                 },
                 "move" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        if let Ok(_) = cf.drop_stone(&player, column) {
-                            answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
+                        let mut cfg = (*cfm).remove(&1).unwrap();
+                        if let Ok(_) = cfg.drop_stone(&player, column) {
+                            answer = Some(format!("{{ \"field\": \"{}\" }}", cfg.display().replace("\n", "\\n")));
                         }
+                        (*cfm).insert(1, cfg);
                     }
                 },
                 "withdraw" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
-                        if let Ok(_) = cf.make_move(&player, Rc::new(ConnectFourMove{ data: column, })) {
-                            answer = Some(format!("{{ \"field\": \"{}\" }}", cf.display().replace("\n", "\\n")));
-                        }
+                        let mut cfg = (*cfm).remove(&1).unwrap();
+                        cfg.withdraw_move(&player, Rc::new(ConnectFourMove{ data: column, }));
+                        answer = Some(format!("{{ \"field\": \"{}\" }}", cfg.display().replace("\n", "\\n")));
+                        (*cfm).insert(1, cfg);
                     }
                 },
                 "eval" => {
-                    if let (Some(player), Some(column)) = readurl(&req) {
-                        let cfclone = cf.clone();
-                        if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {
-                            answer = Some(format!("{{ \"evaluation\": {} }}", eval));
-                        }
-                    }
+                    evaluation_clone = Some((*cfm).get(&1).unwrap().clone());
                 },
                 "best" => {
-                    if let (Some(player), _) = readurl(&req) {
-                        let cfclone = cf.clone();
-                        if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 4, true) {
-                            answer = Some(format!("{{ \"bestmove\": {} }}", mv.data().to_usize()));
-                        }
-                    }                    
+                    best_move_clone = Some((*cfm).get(&1).unwrap().clone());
                 },
                 _ => (),
             }
         }
+
+        // by now the lock on cfc is released, so the expensive calculations below do not inhibit other threads
+        if let Some(cfclone) = evaluation_clone {
+            if let (Some(player), Some(column)) = readurl(&req) {
+                if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {
+                    answer = Some(format!("{{ \"evaluation\": {} }}", eval));
+                }
+            }
+        }
+        if let Some(cfclone) = best_move_clone {
+            if let (Some(player), _) = readurl(&req) {
+                if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 4, true) {
+                    answer = Some(format!("{{ \"bestmove\": {} }}", mv.data().to_usize()));
+                }
+            }                    
+        }
+
         if let Some(line) = answer {
             let mut response = Response::with((status::Ok, line.as_str()));
-            // allow all origins so the service can be called from javascript
+            // allow all origins, so the service can be called from javascript
             response.headers.set(AccessControlAllowOrigin::Any);
             Ok(response)
         } else { return Ok(Response::with(status::BadRequest)) }
@@ -103,7 +118,7 @@ impl Handler for ConnectFourHandler {
 fn main() {
 
     let _server = Iron::new(ConnectFourHandler {
-        cf: Mutex::new(ConnectFour::new()),
+        cfm: Mutex::new(HashMap::new()),
         st: ConnectFourStrategy { 
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,

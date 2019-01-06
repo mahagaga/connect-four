@@ -1,5 +1,5 @@
 *.swp
 *.code-workspace
-*/target
 **/*.rs.bk
 Cargo.lock
+target
