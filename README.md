@@ -24,13 +24,6 @@ if not and you're on Ubuntu you can just call:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-* now you're ready for running the backend service
-
-```
-cd connect-four/server
-cargo run
-```
-
 * you need a webserver running on your computer.
 if that's not the case and you're on Ubuntu you can just call:
 
@@ -43,6 +36,13 @@ for apache and Ubuntu call:
 
 ```
 ln -s `readlink -f connect-four-js` /var/www/html/connect-four
+```
+
+* now you're ready for running the backend service
+
+```
+cd connect-four/server
+cargo run
 ```
 
 * done! you can play on 'http://localhost/connect-four'.
