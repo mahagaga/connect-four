@@ -65,10 +65,12 @@ impl Handler for ConnectFourHandler {
                 },
                 "move" => {
                     if let (Some(player), Some(column)) = readurl(&req) {
+                        // move game out of map ...
                         let mut cfg = (*cfm).remove(&1).unwrap();
                         if let Ok(_) = cfg.drop_stone(&player, column) {
                             answer = Some(format!("{{ \"field\": \"{}\" }}", cfg.display().replace("\n", "\\n")));
                         }
+                        // ... and in again for gaining ownership
                         (*cfm).insert(1, cfg);
                     }
                 },
@@ -90,7 +92,7 @@ impl Handler for ConnectFourHandler {
             }
         }
 
-        // by now the lock on cfc is released, so the expensive calculations below do not inhibit other threads
+        // by now the lock on cfc is released, so the possibly expensive calculations below do not inhibit other threads
         if let Some(cfclone) = evaluation_clone {
             if let (Some(player), Some(column)) = readurl(&req) {
                 if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {
