@@ -146,8 +146,8 @@ impl Handler for ConnectFourHandler {
     }
 }
 
-pub fn start_server(host:&str, port:i32) {
-    let _server = Iron::new(ConnectFourHandler {
+pub fn start_server(host:&str, port:i32) -> iron::Listening {
+    let server = Iron::new(ConnectFourHandler {
         zero: Instant::now(),
         cfm: Mutex::new(HashMap::new()),
         st: ConnectFourStrategy { 
@@ -157,4 +157,5 @@ pub fn start_server(host:&str, port:i32) {
         }
     }).http(format!("{}:{}", host, port)).unwrap();
     println!("On {}", port);
+    server
 }
