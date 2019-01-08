@@ -74,7 +74,6 @@ impl Handler for ConnectFourHandler {
         let mut best_move_clone:Option<ConnectFour> = None;
 
         if let Some(s) = &req.url.path().get(0) {
-
             let mut cfm = self.cfm.lock().unwrap();
 
             match **s {
@@ -82,7 +81,7 @@ impl Handler for ConnectFourHandler {
                     let key = key_from_time(&(*cfm), self.zero);
                     (*cfm).insert(key, ConnectFour::new());
                     // answer must be proper JSON (", no ', \\n, no \n) for ajax
-                    answer = Some(format!("{{ \"field\": \"{}\", \"gameid\": {} }}", (*cfm).get(&1).unwrap().display().replace("\n", "\\n"), key));
+                    answer = Some(format!("{{ \"field\": \"{}\", \"gameid\": {} }}", (*cfm).get(&key).unwrap().display().replace("\n", "\\n"), key));
                 },
                 "move" => {
                     if let (Some(gameid), Some(player), Some(column)) = readurl(&req) {
@@ -92,7 +91,7 @@ impl Handler for ConnectFourHandler {
                             answer = Some(format!("{{ \"field\": \"{}\" }}", cfg.display().replace("\n", "\\n")));
                         }
                         // ... and in again for gaining ownership
-                        (*cfm).insert(1, cfg);
+                        (*cfm).insert(gameid, cfg);
                     }
                 },
                 "withdraw" => {
@@ -156,6 +155,5 @@ pub fn start_server(host:&str, port:i32) -> iron::Listening {
             nscore_koeff: 0.5,
         }
     }).http(format!("{}:{}", host, port)).unwrap();
-    println!("On {}", port);
     server
 }
