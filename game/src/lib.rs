@@ -124,12 +124,12 @@ mod tests {
         if let (Some(mv), Some(score)) = strategy.find_best_move(
                 Rc::new(RefCell::new(game)), &white, 2, true) {
             println!("{:?} {:?} vs {}", mv.data(), score,
-                              12 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
-                            + 12 as f32 * strategy.oscore_koeff * strategy.nscore_koeff);
+                              15 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
+                            + 15 as f32 * strategy.oscore_koeff * strategy.nscore_koeff);
             match score {
                     Score::Undecided(ev) => assert!(
-                        ev == 12 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
-                            + 12 as f32 * strategy.oscore_koeff * strategy.nscore_koeff),
+                        ev == 15 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
+                            + 15 as f32 * strategy.oscore_koeff * strategy.nscore_koeff),
                     _ => assert!(false),
             }
             assert!(*mv.data() == Column::Four);
@@ -149,14 +149,32 @@ mod tests {
              nscore_koeff: 0.5,
         };
 
-        let expected = 7 as f32 * s.mscore_koeff * s.nscore_koeff
+        let expected = 10 as f32 * s.mscore_koeff * s.nscore_koeff
                      + 0 as f32 * s.mscore_koeff
-                     + 7 as f32 * s.oscore_koeff * s.nscore_koeff
+                     + 10 as f32 * s.oscore_koeff * s.nscore_koeff
                      + 1 as f32 * s.oscore_koeff;
         if let Ok(eval) = s.evaluate_move(Rc::new(RefCell::new(g)), &white, Rc::new(mv)) {
             println!("expected score {} vs calculated {}", expected, eval);
             assert!(eval == expected)
         } else { assert!(false) }
+
+        // test vertical evaluation
+        g = ConnectFour::new();
+        let _ = g.drop_stone(&black, Column::One);
+        let _ = g.drop_stone(&white, Column::One);
+        let _ = g.drop_stone(&white, Column::One);
+        
+        let expected = 6 as f32 * s.mscore_koeff * s.nscore_koeff
+                     + 0 as f32 * s.mscore_koeff
+                     + 7 as f32 * s.oscore_koeff * s.nscore_koeff
+                     + 2 as f32 * s.oscore_koeff;
+        if let Ok(eval) = s.evaluate_move(Rc::new(RefCell::new(g)),
+                                          &black,
+                                          Rc::new(ConnectFourMove { data: Column::One, })) {
+            println!("expected score {} vs calculated {}", expected, eval);
+            assert!(eval == expected)
+        } else { assert!(false) }
+
     }
 }
 
@@ -697,9 +715,14 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         let ((_, m_below, _),(_, o_below, _)) = self.efield_counting(&efield,
             vec!(n,n,n),
             (match m { s if s < 3 => 0, b => b-3 }..m).rev().collect());
-        total_score += self.mscore_koeff * m_below as f32;
-        total_score += self.oscore_koeff * o_below as f32;
-        
+        if m_below + (ConnectFour::height()-m-1) as i32 >=3 {
+            total_score += self.mscore_koeff * (m_below as f32 
+                    + self.nscore_koeff * cmp::max(cmp::min((ConnectFour::height()-m-1) as i32, 3-m_below), 0) as f32);
+        }
+        if o_below + (ConnectFour::height()-m-1) as i32 >=3 {
+            total_score += self.oscore_koeff * (o_below as f32 
+                    + self.nscore_koeff * cmp::max(cmp::min((ConnectFour::height()-m-1) as i32, 3-o_below), 0) as f32);
+        }
         Ok(total_score)
     }
 }
