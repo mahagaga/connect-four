@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TOLERANCE:f32 = 0.0001;
+
     #[test]
     fn test_column() {
         assert_eq!(Column::Five.to_usize(), 0x4);
@@ -164,15 +166,19 @@ mod tests {
         let _ = g.drop_stone(&white, Column::One);
         let _ = g.drop_stone(&white, Column::One);
         
+        // the example below points to a questionable trait of the evaluation
+        // cells are adding up to the score even when they are 'redundant', 
+        // i.e. when they belong to a 5-connection in each case they could
+        // belong to a 4-connection
         let expected = 6 as f32 * s.mscore_koeff * s.nscore_koeff
                      + 0 as f32 * s.mscore_koeff
-                     + 7 as f32 * s.oscore_koeff * s.nscore_koeff
+                     + 8 as f32 * s.oscore_koeff * s.nscore_koeff
                      + 2 as f32 * s.oscore_koeff;
         if let Ok(eval) = s.evaluate_move(Rc::new(RefCell::new(g)),
                                           &black,
                                           Rc::new(ConnectFourMove { data: Column::One, })) {
             println!("expected score {} vs calculated {}", expected, eval);
-            assert!(eval == expected)
+            assert!((eval-expected).abs() < TOLERANCE);
         } else { assert!(false) }
 
     }
@@ -683,8 +689,6 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         };
 
         // horizontal score
-        let show:Vec<usize> = (match n { s if s < 3 => 0, b => b-3 }..n).rev().collect();
-        println!("{:?} {} {}", show, match n { s if s < 3 => 0, b => b-3 }, n);
         let ontheleft = self.efield_counting(&efield,
             (match n { s if s < 3 => 0, b => b-3 }..n).rev().collect(),
             vec!(m,m,m));
@@ -712,17 +716,14 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         total_score += score_arithmetics(ontheleft, ontheright);
 
         // vertical score
-        let ((_, m_below, _),(_, o_below, _)) = self.efield_counting(&efield,
+        let ontheleft = self.efield_counting(&efield,
             vec!(n,n,n),
             (match m { s if s < 3 => 0, b => b-3 }..m).rev().collect());
-        if m_below + (ConnectFour::height()-m-1) as i32 >=3 {
-            total_score += self.mscore_koeff * (m_below as f32 
-                    + self.nscore_koeff * cmp::max(cmp::min((ConnectFour::height()-m-1) as i32, 3-m_below), 0) as f32);
-        }
-        if o_below + (ConnectFour::height()-m-1) as i32 >=3 {
-            total_score += self.oscore_koeff * (o_below as f32 
-                    + self.nscore_koeff * cmp::max(cmp::min((ConnectFour::height()-m-1) as i32, 3-o_below), 0) as f32);
-        }
+        let ontheright = self.efield_counting(&efield,
+            vec!(n,n,n),
+            (cmp::min(ConnectFour::height(), m+1)..cmp::min(ConnectFour::height(), m+4)).collect());
+        total_score += score_arithmetics(ontheleft, ontheright);
+
         Ok(total_score)
     }
 }
