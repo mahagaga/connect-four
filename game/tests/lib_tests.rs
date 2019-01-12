@@ -149,7 +149,7 @@ fn test_find_best_move() {
             Rc::new(RefCell::new(game)), &black, 3, true) {
         println!("trap {:?} {:?}", mv.data(), score);
         assert!(Score::Undecided(7.8) == score);
-        // one would think Three is best - but: computers says no. Three scores 7.5.
+        // one may think Three is best - but: computers says no. Three scores 7.5.
         assert!(*mv.data() == Column::Six);
     } else { assert!(false); }
 

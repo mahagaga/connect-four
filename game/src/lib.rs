@@ -482,7 +482,8 @@ impl ConnectFourStrategy {
 use std::cmp;
 impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
     
-    fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>, p: &Player, mv: Rc<Move<Column>>) 
+    fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+                     p: &Player, mv: Rc<Move<Column>>) 
     -> Result<f32, Withdraw> {
         let n = mv.data().to_usize();
         let m = g.borrow().state()[n].len();
@@ -514,9 +515,26 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
             i += 1;
         }
         
-        let mut total_score = 0.0;
+        let total_score = self.positional_score(n, m, &efield)
+                        + self.tabu_score(g, p, mv);
+
+        Ok(total_score)
+    }
+}
+
+impl ConnectFourStrategy {
+    // comparing tabu rows before and after the move
+    fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+                  p: &Player, mv: Rc<Move<Column>>)  -> f32 {
+        // TODO: implemenatation
+        0.0
+    }
+    
+    // basically adding up the user's own potential for connecting four from/to 
+    // here and the opponents, weighed by the strategy's coefficients
+    fn positional_score(&self, n:usize, m:usize, efield:&Vec<Vec<Cell>>) -> f32 {
         let score_arithmetics = |((mfree_left, m_left, nm_left), (ofree_left, o_left, no_left)), 
-                                 ((mfree_right,m_right,nm_right),(ofree_right,o_right,no_right))| -> f32 {
+                                ((mfree_right,m_right,nm_right),(ofree_right,o_right,no_right))| -> f32 {
             let mut partial_score = 0.0;
             if mfree_left + mfree_right >= 3 {
                 partial_score += self.mscore_koeff * (m_left + m_right) as f32;
@@ -529,42 +547,43 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
             partial_score
         };
 
+        let mut total_score = 0.0;
         // horizontal score
-        let ontheleft = self.efield_counting(&efield,
+        let ontheleft = self.efield_counting(efield,
             (match n { s if s < 3 => 0, b => b-3 }..n).rev().collect(),
             vec!(m,m,m));
-        let ontheright = self.efield_counting(&efield,
+        let ontheright = self.efield_counting(efield,
             (cmp::min(ConnectFour::width(), n+1)..cmp::min(ConnectFour::width(), n+4)).collect(),
             vec!(m,m,m));
         total_score += score_arithmetics(ontheleft, ontheright);
 
         // diagonal score '/'
-        let ontheleft = self.efield_counting(&efield,
+        let ontheleft = self.efield_counting(efield,
             (match n { s if s < 3 => 0, b => b-3 }..n).rev().collect(),
             (match m { s if s < 3 => 0, b => b-3 }..m).rev().collect());
-        let ontheright = self.efield_counting(&efield,
+        let ontheright = self.efield_counting(efield,
             (cmp::min(ConnectFour::width(), n+1)..cmp::min(ConnectFour::width(), n+4)).collect(),
             (cmp::min(ConnectFour::height(),m+1)..cmp::min(ConnectFour::height(),m+4)).collect());
         total_score += score_arithmetics(ontheleft, ontheright);
 
         // diagonal score '\'
-        let ontheleft = self.efield_counting(&efield,
+        let ontheleft = self.efield_counting(efield,
             (match n { s if s < 3 => 0, b => b-3 }..n).rev().collect(),
             (cmp::min(ConnectFour::height(),m+1)..cmp::min(ConnectFour::height(),m+4)).collect());
-        let ontheright = self.efield_counting(&efield,
+        let ontheright = self.efield_counting(efield,
             (cmp::min(ConnectFour::width(), n+1)..cmp::min(ConnectFour::width(), n+4)).collect(),
             (match m { s if s < 3 => 0, b => b-3 }..m).rev().collect());
         total_score += score_arithmetics(ontheleft, ontheright);
 
         // vertical score
-        let ontheleft = self.efield_counting(&efield,
+        let ontheleft = self.efield_counting(efield,
             vec!(n,n,n),
             (match m { s if s < 3 => 0, b => b-3 }..m).rev().collect());
-        let ontheright = self.efield_counting(&efield,
+        let ontheright = self.efield_counting(efield,
             vec!(n,n,n),
             (cmp::min(ConnectFour::height(), m+1)..cmp::min(ConnectFour::height(), m+4)).collect());
         total_score += score_arithmetics(ontheleft, ontheright);
 
-        Ok(total_score)
+        total_score
     }
 }
