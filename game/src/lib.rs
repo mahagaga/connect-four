@@ -1,190 +1,4 @@
 //#################################################################################################
-// tests
-//#################################################################################################
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    const TOLERANCE:f32 = 0.0001;
-
-    #[test]
-    fn test_column() {
-        assert_eq!(Column::Five.to_usize(), 0x4);
-    }
-    #[test]
-    fn test_move() {
-        let white = Player::White;
-            
-        let middle = Box::new(ConnectFourMove { data: Column::Four });
-        assert_eq!(middle.data().to_usize(), 0x3);
-
-        // drop 7 white Stones in the middle column
-        let mut cf = ConnectFour::new();
-        for i in 0..7 {
-            //println!("drop {} time", i+1);
-            let middle = Rc::new(ConnectFourMove { data: Column::Four });
-            match cf.make_move(&white, middle) {
-                Ok(x) => match x {
-                    // should be undecided 3 times
-                    Score::Undecided(_p) => assert!(i<3,i),
-                    // then won 3 times
-                    Score::Won => assert!(i>2,i),
-                    _ => assert!(false),
-                }
-                // the 7th stone is one too many
-                _ => assert!(i>5),
-            }
-        }
-
-        // drop 4 stones in a row
-        let mut cf = ConnectFour::new();
-        match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Four })) {
-            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
-            _ => assert!(false),
-        }
-        match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Two })) {
-            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
-            _ => assert!(false),
-        }
-        match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Five })) {
-            Ok(x) => if let Score::Undecided(_p) = x { () } else { assert!(false)},
-            _ => assert!(false),
-        }
-        match cf.make_move(&white, Rc::new(ConnectFourMove { data: Column::Three })) {
-            Ok(x) => if let Score::Won = x { () } else { assert!(false)},
-            _ => assert!(false),
-        }
-    }
-
-    #[test]
-    fn test_possible_moves() {
-        let mut cf = ConnectFour::new();
-        let p = Player::Black;
-        let pm = cf.possible_moves(&p);
-        assert!(pm.len()==ConnectFour::width());
-        assert!(*pm[3].data() == Column::Four);
-
-        for _ in 0..6 {
-            let _ = cf.drop_stone(&p, Column::Four);
-        }
-        let pm:Vec<Rc<Move<Column>>> = cf.possible_moves(&p);
-        println!("{:?}", &cf.field);
-        for x in &pm {
-            println!("{:?}", &x.data());
-        }
-        assert!(pm.len()==ConnectFour::width()-1);
-        assert!(*pm[3].data() == Column::Five);
-    }
-
-    #[test]
-    fn test_find_best_move() {
-        let white = Player::White;
-        let black = Player::Black;
-        let strategy = ConnectFourStrategy {
-             mscore_koeff: 1.0,
-             oscore_koeff: 0.8,
-             nscore_koeff: 0.5
-        };
-
-        // recognize a winner
-        let mut game = ConnectFour::new();
-        for _ in 0..3 { 
-            let score = game.drop_stone(&white, Column::Six); 
-            match score {
-                Ok(Score::Undecided(p)) => assert!(p == 0.5),
-                _ => assert!(false),
-            };
-        }
-        if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 0, false) {
-            println!("{:?} {:?}", mv.data(), score);
-            assert!(Score::Won == score);
-            assert!(*mv.data() == Column::Six);
-        } else { assert!(false); }
-
-        // danger awareness
-        game = ConnectFour::new();
-        for _ in 0..3 { 
-            let score = game.drop_stone(&black, Column::Six); 
-            match score {
-                Ok(Score::Undecided(p)) => assert!(p == 0.5),
-                _ => assert!(false),
-            };
-        }
-        if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 1, false) {
-            println!("{:?} {:?}", mv.data(), score);
-            match score {
-                Score::Undecided(p) => assert!(p == 0.5),
-                _ => { println!("didn't catch the danger"); assert!(false); },
-            }
-            assert!(*mv.data() == Column::Six);
-        } else { assert!(false); }
-
-        // first move
-        game = ConnectFour::new();
-        if let (Some(mv), Some(score)) = strategy.find_best_move(
-                Rc::new(RefCell::new(game)), &white, 2, true) {
-            println!("{:?} {:?} vs {}", mv.data(), score,
-                              15 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
-                            + 15 as f32 * strategy.oscore_koeff * strategy.nscore_koeff);
-            match score {
-                    Score::Undecided(ev) => assert!(
-                        ev == 15 as f32 * strategy.mscore_koeff * strategy.nscore_koeff
-                            + 15 as f32 * strategy.oscore_koeff * strategy.nscore_koeff),
-                    _ => assert!(false),
-            }
-            assert!(*mv.data() == Column::Four);
-        } else { assert!(false); }
-    }
-
-    #[test]
-    fn test_evaluate_move() {
-        let mut g = ConnectFour::new();
-        let black = Player::Black;
-        let white = Player::White;
-        let _ = g.drop_stone(&black, Column::Two);
-        let mv = ConnectFourMove { data: Column::Five, };
-        let s = ConnectFourStrategy  {
-             mscore_koeff: 1.0,
-             oscore_koeff: 0.8,
-             nscore_koeff: 0.5,
-        };
-
-        let expected = 10 as f32 * s.mscore_koeff * s.nscore_koeff
-                     + 0 as f32 * s.mscore_koeff
-                     + 10 as f32 * s.oscore_koeff * s.nscore_koeff
-                     + 1 as f32 * s.oscore_koeff;
-        if let Ok(eval) = s.evaluate_move(Rc::new(RefCell::new(g)), &white, Rc::new(mv)) {
-            println!("expected score {} vs calculated {}", expected, eval);
-            assert!(eval == expected)
-        } else { assert!(false) }
-
-        // test vertical evaluation
-        g = ConnectFour::new();
-        let _ = g.drop_stone(&black, Column::One);
-        let _ = g.drop_stone(&white, Column::One);
-        let _ = g.drop_stone(&white, Column::One);
-        
-        // the example below points to a questionable trait of the evaluation
-        // cells are adding up to the score even when they are 'redundant', 
-        // i.e. when they belong to a 5-connection in each case they could
-        // belong to a 4-connection
-        let expected = 6 as f32 * s.mscore_koeff * s.nscore_koeff
-                     + 0 as f32 * s.mscore_koeff
-                     + 8 as f32 * s.oscore_koeff * s.nscore_koeff
-                     + 2 as f32 * s.oscore_koeff;
-        if let Ok(eval) = s.evaluate_move(Rc::new(RefCell::new(g)),
-                                          &black,
-                                          Rc::new(ConnectFourMove { data: Column::One, })) {
-            println!("expected score {} vs calculated {}", expected, eval);
-            assert!((eval-expected).abs() < TOLERANCE);
-        } else { assert!(false) }
-
-    }
-}
-
-//#################################################################################################
 // generic game with two players
 //#################################################################################################
 
@@ -223,9 +37,9 @@ pub trait Move<T> {
 #[derive(PartialEq, Debug)]
 pub enum Score {
     Undecided(f32),
-    Remis,
-    Won,
-    Lost,
+    Remis(u32),
+    Won(u32),
+    Lost(u32),
 }
 
 #[derive(Debug)]
@@ -254,8 +68,8 @@ pub trait Strategy<T,S> {
         ) -> (Option<Rc<Move<T>>>, Option<Score>) {
 
         //let mut win_option: Option<Rc<Move<T>>> = None;
-        let mut remis_option: Option<Rc<Move<T>>> = None;
-        let mut lost_option: Option<Rc<Move<T>>> = None;
+        let mut remis_option: Option<(Rc<Move<T>>,u32)> = None;
+        let mut lost_option: Option<(Rc<Move<T>>,u32)> = None;
         let mut follow_ups: Vec<(Rc<Move<T>>, f32)> = Vec::new();
         
         let options = g.borrow().possible_moves(p);
@@ -263,14 +77,14 @@ pub trait Strategy<T,S> {
             let score = g.borrow_mut().make_move(p, Rc::clone(&mv));
             match score {
                 Ok(score) => match score {
-                    Score::Won => {
+                    Score::Won(in_n) => {
                         //println!("{}", &g.borrow().display());
                         //println!("{:?} wins with {:?}", p, mv.display());
                         g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
-                        return (Some(mv), Some(Score::Won));;
+                        return (Some(mv), Some(Score::Won(in_n)));
                     },
-                    Score::Remis => { remis_option = Some(Rc::clone(&mv)); },
-                    Score::Lost => { lost_option = Some(Rc::clone(&mv)); },
+                    Score::Remis(in_n) => { remis_option = Some((Rc::clone(&mv), in_n)); },
+                    Score::Lost(in_n) => { lost_option = Some((Rc::clone(&mv), in_n)); },
                     Score::Undecided(pv) => { follow_ups.push((Rc::clone(&mv), pv)); },
                 },
                 Err(_) => (),//return Err(_),
@@ -284,11 +98,11 @@ pub trait Strategy<T,S> {
                 let _ = g.borrow_mut().make_move(p, Rc::clone(&undecided));
                 let (_, advscore) = self.find_best_move(Rc::clone(&g), p.opponent(), moves_ahead-1, false);
                 match advscore {
-                    Some(Score::Won) => { lost_option = Some(Rc::clone(&undecided)); },
-                    Some(Score::Remis) => { remis_option = Some(Rc::clone(&undecided)); },
-                    Some(Score::Lost) => { 
+                    Some(Score::Won(in_n)) => { lost_option = Some((Rc::clone(&undecided), in_n+1)); },
+                    Some(Score::Remis(in_n)) => { remis_option = Some((Rc::clone(&undecided), in_n+1)); },
+                    Some(Score::Lost(in_n)) => { 
                         g.borrow_mut().withdraw_move(p, Rc::clone(&undecided));
-                        return (Some(undecided), Some(Score::Won));
+                        return (Some(undecided), Some(Score::Won(in_n+1)));
                     },
                     Some(Score::Undecided(advpv)) => {
                         still_undecided.push((Rc::clone(&undecided), 1.0-advpv));
@@ -324,16 +138,16 @@ pub trait Strategy<T,S> {
         }
 
         if let Some(undecided) = undecided_option {
-            if let Some(remis) = remis_option {
+            if let Some((remis, in_n)) = remis_option {
                 if undecided_pv >= 0.5 { return (Some(undecided), Some(Score::Undecided(undecided_pv))); }
-                else { return (Some(remis), Some(Score::Remis)); }
+                else { return (Some(remis), Some(Score::Remis(in_n+1))); }
             } else {
                 return (Some(undecided), Some(Score::Undecided(undecided_pv)));
             }
         }
 
-        if let Some(remis) = remis_option { return (Some(remis), Some(Score::Remis)); }
-        if let Some(lost) = lost_option { return (Some(lost), Some(Score::Lost)); }
+        if let Some((remis, in_n)) = remis_option { return (Some(remis), Some(Score::Remis(in_n))); }
+        if let Some((lost, in_n)) = lost_option { return (Some(lost), Some(Score::Lost(in_n))); }
         (None, None)
     }
 }
@@ -460,8 +274,8 @@ enum Step {
 //### connect four ################################################################################
 
 impl ConnectFour {
-    fn width() -> usize { 7 }
-    fn height() -> usize { 6 }
+    pub fn width() -> usize { 7 }
+    pub fn height() -> usize { 6 }
     
     pub fn new() -> Self {
         let mut cf = ConnectFour{
@@ -495,11 +309,12 @@ impl ConnectFour {
     }
 
     fn get_score(&self, p: &Player, n: usize, m: usize) -> Result<Score, Withdraw> {
+
         // vertical
         let below = self.matching_distance(vec![n,n,n], m, Step::Down, p);
         if below >= 3 {
             //println!("{} below {}", below, m);
-            return Ok(Score::Won)
+            return Ok(Score::Won(0))
         }
 
         // horizontal
@@ -509,7 +324,7 @@ impl ConnectFour {
         let left = self.matching_distance(iter, m, Step::Plane, p);
         if left + right >= 3 {
             //println!("left {}, right {}", left, right);
-            return Ok(Score::Won)
+            return Ok(Score::Won(0))
         }
 
         // diagonal (\)
@@ -519,8 +334,9 @@ impl ConnectFour {
         let left = self.matching_distance(iter, m, Step::Down, p);
         if left + right >= 3 {
             //println!("\\left {}, right {}", left, right);
-            return Ok(Score::Won)
+            return Ok(Score::Won(0))
         }
+
         // diagonal (/)
         let iter:Vec<usize> = (0..n).rev().collect();
         let right = self.matching_distance(iter, m, Step::Down, p);
@@ -528,7 +344,12 @@ impl ConnectFour {
         let left = self.matching_distance(iter, m, Step::Up, p);
         if left + right >= 3 {
             //println!("/left {}, right {}", left, right);
-            return Ok(Score::Won)
+            return Ok(Score::Won(0))
+        }
+
+        // last stone
+        if !self.move_possible() {
+            return Ok(Score::Remis(0))
         }
 
         Ok(Score::Undecided(0.5))
@@ -576,6 +397,15 @@ impl ConnectFour {
 
     pub fn undrop_stone(&mut self, p: &Player, c:Column) {
         self.withdraw_move(&p, Rc::new(ConnectFourMove { data: c }))
+    }
+
+    fn move_possible(&self) -> bool {
+        for col in &self.field {
+            if col.len() < ConnectFour::height() {
+                return true;
+            }
+        }
+        false
     }
 }
 
