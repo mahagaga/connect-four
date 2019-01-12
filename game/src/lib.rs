@@ -69,8 +69,8 @@ pub trait Strategy<T,S> {
 
         //let mut win_option: Option<Rc<Move<T>>> = None;
         let mut remis_option: Option<(Rc<Move<T>>,u32)> = None;
-        let mut lost_option: Option<(Rc<Move<T>>,u32)> = None;
-        let mut follow_ups: Vec<(Rc<Move<T>>, f32)> = Vec::new();
+        let mut lost_options: Vec<(Rc<Move<T>>,u32)> = Vec::new();
+        let mut undecided_options: Vec<(Rc<Move<T>>, f32)> = Vec::new();
         
         let options = g.borrow().possible_moves(p);
         for mv in options.into_iter() {
@@ -85,8 +85,8 @@ pub trait Strategy<T,S> {
                         return (Some(mv), Some(Score::Won(in_n)));
                     },
                     Score::Remis(in_n) => { remis_option = Some((Rc::clone(&mv), in_n)); },
-                    Score::Lost(in_n) => { lost_option = Some((Rc::clone(&mv), in_n)); },
-                    Score::Undecided(pv) => { follow_ups.push((Rc::clone(&mv), pv)); },
+                    Score::Lost(in_n) => { lost_options.push((Rc::clone(&mv), in_n)); },
+                    Score::Undecided(pv) => { undecided_options.push((Rc::clone(&mv), pv)); },
                 },
                 Err(_) => (),//return Err(_),
             }
@@ -94,12 +94,12 @@ pub trait Strategy<T,S> {
         }
         
         let mut still_undecided: Vec<(Rc<Move<T>>, f32)> = Vec::new();
-        for (undecided, pv) in follow_ups {
+        for (undecided, pv) in undecided_options {
             if moves_ahead > 0 {
                 let _ = g.borrow_mut().make_move(p, Rc::clone(&undecided));
                 let (_, advscore) = self.find_best_move(Rc::clone(&g), p.opponent(), moves_ahead-1, false);
                 match advscore {
-                    Some(Score::Won(in_n)) => { lost_option = Some((Rc::clone(&undecided), in_n+1)); },
+                    Some(Score::Won(in_n)) => { lost_options.push((Rc::clone(&undecided), in_n+1)); },
                     Some(Score::Remis(in_n)) => { remis_option = Some((Rc::clone(&undecided), in_n+1)); },
                     Some(Score::Lost(in_n)) => { 
                         g.borrow_mut().withdraw_move(p, Rc::clone(&undecided));
@@ -148,7 +148,17 @@ pub trait Strategy<T,S> {
         }
 
         if let Some((remis, in_n)) = remis_option { return (Some(remis), Some(Score::Remis(in_n))); }
-        if let Some((lost, in_n)) = lost_option { return (Some(lost), Some(Score::Lost(in_n))); }
+        let mut latest_possible = None;
+        let mut latest = 0;
+        for (lost, in_n) in lost_options {
+            if in_n > latest { latest_possible = Some((lost, in_n)); latest = in_n; }
+            else {
+                match latest_possible {
+                     None => latest_possible = Some((lost, in_n)), _ => ()
+                }
+            }
+        }
+        if let Some((lost, in_n)) = latest_possible { return (Some(lost), Some(Score::Lost(in_n))); }
         (None, None)
     }
 }
