@@ -75,11 +75,12 @@ pub trait Strategy<T,S> {
         let options = g.borrow().possible_moves(p);
         for mv in options.into_iter() {
             let score = g.borrow_mut().make_move(p, Rc::clone(&mv));
+                        
             match score {
                 Ok(score) => match score {
                     Score::Won(in_n) => {
                         //println!("{}", &g.borrow().display());
-                        //println!("{:?} wins with {:?}", p, mv.display());
+                        //println!("{:?} wins with {:?} in {}", p, mv.display(), in_n);
                         g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
                         return (Some(mv), Some(Score::Won(in_n)));
                     },

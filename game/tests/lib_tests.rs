@@ -138,6 +138,33 @@ fn test_find_best_move() {
         }
         assert!(*mv.data() == Column::Four);
     } else { assert!(false); }
+
+    // spot traps
+    game = ConnectFour::new();
+    game.drop_stone(&white, Column::Four).unwrap();
+    game.drop_stone(&black, Column::Four).unwrap();
+    game.drop_stone(&white, Column::Five).unwrap();
+    // below 3 moves ahead premeditation the danger is not recognized!
+    if let (Some(mv), Some(score)) = strategy.find_best_move(
+            Rc::new(RefCell::new(game)), &black, 3, true) {
+        println!("trap {:?} {:?}", mv.data(), score);
+        assert!(Score::Undecided(7.8) == score);
+        // one would think Three is best - but: computers says no. Three scores 7.5.
+        assert!(*mv.data() == Column::Six);
+    } else { assert!(false); }
+
+    // spot opportunities
+    game = ConnectFour::new();
+    game.drop_stone(&white, Column::Four).unwrap();
+    game.drop_stone(&black, Column::Four).unwrap();
+    game.drop_stone(&white, Column::Five).unwrap();
+    game.drop_stone(&black, Column::Five).unwrap();
+    if let (Some(mv), Some(score)) = strategy.find_best_move(
+            Rc::new(RefCell::new(game)), &white, 4, true) {
+        println!("opportunity {:?} {:?}", mv.data(), score);
+        assert!(Score::Won(2) == score);
+        assert!(*mv.data() == Column::Three);
+    } else { assert!(false); }
 }
 
 #[test]
