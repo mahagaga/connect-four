@@ -209,5 +209,67 @@ fn test_evaluate_move() {
         println!("expected score {} vs calculated {}", expected, eval);
         assert!((eval-expected).abs() < TOLERANCE);
     } else { assert!(false) }
+}
 
+#[test]
+fn test_latest_possible_loss() {
+    let x = "------
+xxx
+ox
+xx
+xxo
+";
+    let game = replicate_game(x);
+    assert_best_move(None, game, &Player::White, Column::One, Score::Lost(3));
+
+    let x = "------
+xxo
+xx
+ox
+xxx
+";
+    let game = replicate_game(x);
+    assert_best_move(None, game, &Player::White, Column::Four, Score::Lost(3));
+}
+
+fn assert_best_move(strategy: Option<ConnectFourStrategy>,
+                    game: ConnectFour, player: &Player,
+                    col: Column, score: Score) {
+    let strategy = match strategy {
+        Some(s) => s,
+        None => ConnectFourStrategy {
+            mscore_koeff: 1.0,
+            oscore_koeff: 0.8,
+            nscore_koeff: 0.5,
+        },
+    };
+    
+    if let (Some(mv), Some(calculated)) = strategy.find_best_move(
+            Rc::new(RefCell::new(game)), player, 4, true) {
+        println!("{:?} {:?}", *mv.data(), calculated);
+        assert!(calculated == score);
+        assert!(*mv.data() == col);
+    } else { assert!(false); }
+}
+
+fn replicate_game(plan: &str) -> ConnectFour {
+    let mut g = ConnectFour::new();
+    for (i, line) in plan.split("\n").enumerate() {
+        match i {
+            b if (b > 0 && b < 8) => {
+                for c in line.chars() {
+                    g.drop_stone(
+                        match c {
+                            'x' => &Player::Black,
+                            'o' => &Player::White,
+                            what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
+                        },
+                        Column::from_usize(i-1)
+                    ).unwrap(); 
+                }
+            },
+            _ => assert_eq!(line, "------"),
+        }
+    }
+    g
 }
