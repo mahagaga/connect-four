@@ -85,7 +85,11 @@ fn test_find_best_move() {
     let strategy = ConnectFourStrategy {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
-            nscore_koeff: 0.5
+            nscore_koeff: 0.5,
+            me_my_tabu_koeff: 0.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
+            them_opp_tabu_koeff: 0.0,
     };
 
     // recognize a winner
@@ -178,6 +182,10 @@ fn test_evaluate_move() {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
+            me_my_tabu_koeff: 0.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
+            them_opp_tabu_koeff: 0.0,
     };
 
     let expected = 10 as f32 * s.mscore_koeff * s.nscore_koeff
@@ -241,6 +249,10 @@ fn assert_best_move(strategy: Option<ConnectFourStrategy>,
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
+            me_my_tabu_koeff: 0.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
+            them_opp_tabu_koeff: 0.0,
         },
     };
     

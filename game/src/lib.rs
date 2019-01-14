@@ -424,6 +424,10 @@ pub struct ConnectFourStrategy {
     pub oscore_koeff: f32,
     pub mscore_koeff: f32,
     pub nscore_koeff: f32,
+    pub me_my_tabu_koeff: f32,
+    pub me_opp_tabu_koeff: f32,
+    pub them_my_tabu_koeff: f32,
+    pub them_opp_tabu_koeff: f32,
 }
 
 enum Cell {
@@ -516,18 +520,97 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         }
         
         let total_score = self.positional_score(n, m, &efield)
-                        + self.tabu_score(g, p, mv);
+                        + self.tabu_diff_score(g, p, mv);
 
         Ok(total_score)
     }
 }
 
+enum Who {
+    Me,
+    Them,
+}
+
+struct Tabu {
+    //column: Column,
+    me_first: Option<(Who,u32)>,
+    opp_first: Option<(Who,u32)>,
+}
+
 impl ConnectFourStrategy {
     // comparing tabu rows before and after the move
-    fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+    fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player, mv: Rc<Move<Column>>)  -> f32 {
-        // TODO: implemenatation
-        0.0
+        let mut diff_score = self.tabu_score(Rc::clone(&g), p);
+        g.borrow_mut().make_move(&Player::White, Rc::clone(&mv)).unwrap();
+        diff_score -= self.tabu_score(Rc::clone(&g), p);     
+        g.borrow_mut().withdraw_move(&Player::White, Rc::clone(&mv));
+        diff_score
+    }
+
+    fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+                  p: &Player)  -> f32 {
+        let mut mutable_game = g.borrow_mut();
+        
+        (0..ConnectFour::width()) // loop over columns
+        .map(|col| {
+            // look for tabus
+            let mut tabu = Tabu{ //column: Column::from_usize(col),
+                                 me_first: None, opp_first: None, };
+            let mut cp = p;
+            let mut i = 0;
+            while let Ok(score) = mutable_game.make_move(cp, Rc::new(
+                    ConnectFourMove { data: Column::from_usize(col) })) {
+                match score {
+                    Score::Won(_) => { 
+                        tabu.me_first = Some((match i%2 { 0 => Who::Them, _ => Who::Me, }, i));
+                    },
+                    _ => (),
+                }
+                cp = cp.opponent();
+                i += 1;
+            }
+            for _ in 0..i {
+                cp = cp.opponent();
+                mutable_game.withdraw_move(cp, Rc::new(
+                    ConnectFourMove { data: Column::from_usize(col) }));
+            }
+
+            let mut cp = p.opponent();
+            let mut i = 0;
+            while let Ok(score) = mutable_game.make_move(cp, Rc::new(
+                    ConnectFourMove { data: Column::from_usize(col) })) {
+                match score {
+                    Score::Won(_) => { 
+                        tabu.opp_first = Some((match i%2 { 0 => Who::Me, _ => Who::Them, }, i));
+                    },
+                    _ => (),
+                }
+                cp = cp.opponent();
+                i += 1;
+            }
+            for _ in 0..i {
+                cp = cp.opponent();
+                mutable_game.withdraw_move(cp, Rc::new(
+                    ConnectFourMove { data: Column::from_usize(col) }));
+            }
+
+            tabu
+        })
+        .map(|tabu| {
+            let mine = match tabu.me_first {
+                Some((Who::Me, _when)) => self.me_my_tabu_koeff as f32,
+                Some((Who::Them, _when)) => - self.me_opp_tabu_koeff as f32,
+                None => 0.0,
+            };
+            let theirs = match tabu.opp_first {
+                Some((Who::Me, _when)) => self.them_my_tabu_koeff as f32,
+                Some((Who::Them, _when)) => - self.them_opp_tabu_koeff as f32,
+                None => 0.0,
+            };
+            mine + theirs
+        })
+        .sum()
     }
     
     // basically adding up the user's own potential for connecting four from/to 
