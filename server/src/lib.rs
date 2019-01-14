@@ -153,6 +153,10 @@ pub fn start_server(host:&str, port:i32) -> iron::Listening {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
+            me_my_tabu_koeff: 0.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
+            them_opp_tabu_koeff: 0.0,
         }
     }).http(format!("{}:{}", host, port)).unwrap();
     server

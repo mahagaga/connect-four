@@ -1,10 +1,12 @@
 extern crate server;
 extern crate iron;
 extern crate hyper;
+extern crate regex;
 
 use server::start_server;
 use iron::Listening;
 use std::io::Read;
+use regex::Regex;
 
 #[test]
 fn it_works() {
@@ -17,14 +19,16 @@ fn it_works() {
         let mut s = String::new();
         response.read_to_string(&mut s).unwrap();
 
-        assert_eq!(a, s);
+        let expectation = Regex::new(a).unwrap();
+        println!("{}", s);
+        assert!(expectation.is_match(s.as_str()));
     }
 
     for (question, answer) in vec![
-        ("new", "{ \"field\": \"------\\n\\n\\n\\n\\n\\n\\n\\n------\", \"gameid\": 1 }"),
-        ("new", "{ \"field\": \"------\\n\\n\\n\\n\\n\\n\\n\\n------\", \"gameid\": 2 }"),
-        ("move/1/black/4", "{ \"field\": \"------\\n\\n\\n\\n\\no\\n\\n\\n------\" }"),
-        ("move/2/white/5", "{ \"field\": \"------\\n\\n\\n\\n\\n\\nx\\n\\n------\" }"),
+        ("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": [0-9]+ [}]"),
+        ("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": [0-9]+ [}]"),
+//        ("move/?/black/4", "[{] \"field\": \"-{6}([\\\\]n){5}o([\\\\]n){3}-{6}\" [}]"),
+//        ("move/?/black/5", "[{] \"field\": \"-{6}([\\\\]n){6}x([\\\\]n){5}-{6}\" [}]"),
     ] {
         check_response(question, answer, &server, &client)
     }
