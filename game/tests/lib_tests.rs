@@ -90,6 +90,7 @@ fn test_find_best_move() {
             me_opp_tabu_koeff: 0.0,
             them_my_tabu_koeff: 0.0,
             them_opp_tabu_koeff: 0.0,
+            defense_koeff: 0.0,
     };
 
     // recognize a winner
@@ -186,6 +187,7 @@ fn test_evaluate_move() {
             me_opp_tabu_koeff: 0.0,
             them_my_tabu_koeff: 0.0,
             them_opp_tabu_koeff: 0.0,
+            defense_koeff: 0.0,
     };
 
     let expected = 10 as f32 * s.mscore_koeff * s.nscore_koeff
@@ -240,6 +242,37 @@ xxx
     assert_best_move(None, game, &Player::White, Column::Four, Score::Lost(3));
 }
 
+#[test]
+fn test_evaluate_tabu_move() {
+    let strategy = ConnectFourStrategy {
+        mscore_koeff: 0.0,
+        oscore_koeff: 0.0,
+        nscore_koeff: 0.0,
+        me_my_tabu_koeff: 1.0,
+        me_opp_tabu_koeff: 2.0,
+        them_my_tabu_koeff: 4.0,
+        them_opp_tabu_koeff: 8.0,
+        defense_koeff: 0.5,
+    };
+    let game = replicate_game("------
+ox
+ox
+ox
+xo
+");
+    let g = Rc::new(RefCell::new(game));
+    let h = g.clone();
+    match strategy.evaluate_move(g, &Player::Black, Rc::new(ConnectFourMove { data: Column::Two })) {
+        Ok(e) => { println!("{}", e); assert!(e==8.0) },
+        _ => assert!(false),
+    }
+    match strategy.evaluate_move(h.clone(), &Player::White, Rc::new(ConnectFourMove { data: Column::Two })) {
+        Ok(e) => { println!("{}", e); assert!(e==0.5) },
+        _ => assert!(false),
+    }
+
+}
+
 fn assert_best_move(strategy: Option<ConnectFourStrategy>,
                     game: ConnectFour, player: &Player,
                     col: Column, score: Score) {
@@ -253,6 +286,7 @@ fn assert_best_move(strategy: Option<ConnectFourStrategy>,
             me_opp_tabu_koeff: 0.0,
             them_my_tabu_koeff: 0.0,
             them_opp_tabu_koeff: 0.0,
+            defense_koeff: 0.0,
         },
     };
     

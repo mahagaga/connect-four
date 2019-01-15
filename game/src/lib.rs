@@ -428,6 +428,7 @@ pub struct ConnectFourStrategy {
     pub me_opp_tabu_koeff: f32,
     pub them_my_tabu_koeff: f32,
     pub them_opp_tabu_koeff: f32,
+    pub defense_koeff: f32,
 }
 
 enum Cell {
@@ -526,13 +527,15 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
     }
 }
 
+#[derive(Debug)]
 enum Who {
     Me,
     Them,
 }
 
+#[derive(Debug)]
 struct Tabu {
-    //column: Column,
+    column: Column,
     me_first: Option<(Who,u32)>,
     opp_first: Option<(Who,u32)>,
 }
@@ -547,17 +550,24 @@ impl ConnectFourStrategy {
             me_opp_tabu_koeff: 0.0,
             them_my_tabu_koeff: 0.0,
             them_opp_tabu_koeff: 0.0,
+            defense_koeff: 0.0,
         }
     }
 
     // comparing tabu rows before and after the move
     fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player, mv: Rc<Move<Column>>)  -> f32 {
-        let mut diff_score = self.tabu_score(Rc::clone(&g), p);
-        g.borrow_mut().make_move(&Player::White, Rc::clone(&mv)).unwrap();
-        diff_score -= self.tabu_score(Rc::clone(&g), p);     
-        g.borrow_mut().withdraw_move(&Player::White, Rc::clone(&mv));
-        diff_score
+        let ground_score = self.tabu_score(Rc::clone(&g), p);
+
+        g.borrow_mut().make_move(p, Rc::clone(&mv)).unwrap();
+        let offense_score = ground_score - self.tabu_score(Rc::clone(&g), p);     
+        g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
+
+        g.borrow_mut().make_move(p.opponent(), Rc::clone(&mv)).unwrap();
+        let defense_score = ground_score - self.tabu_score(Rc::clone(&g), p);     
+        g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&mv));
+        
+        offense_score - defense_score * self.defense_koeff
     }
 
     fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
@@ -567,7 +577,7 @@ impl ConnectFourStrategy {
         (0..ConnectFour::width()) // loop over columns
         .map(|col| {
             // look for tabus
-            let mut tabu = Tabu{ //column: Column::from_usize(col),
+            let mut tabu = Tabu{ column: Column::from_usize(col),
                                  me_first: None, opp_first: None, };
             let mut cp = p;
             let mut i = 0;
@@ -582,6 +592,7 @@ impl ConnectFourStrategy {
                 cp = cp.opponent();
                 i += 1;
             }
+            //println!("{}", mutable_game.display());
             for _ in 0..i {
                 cp = cp.opponent();
                 mutable_game.withdraw_move(cp, Rc::new(
@@ -601,12 +612,14 @@ impl ConnectFourStrategy {
                 cp = cp.opponent();
                 i += 1;
             }
+            //println!("{}", mutable_game.display());
             for _ in 0..i {
                 cp = cp.opponent();
                 mutable_game.withdraw_move(cp, Rc::new(
                     ConnectFourMove { data: Column::from_usize(col) }));
             }
-
+            
+            //println!("{:?}", &tabu);
             tabu
         })
         .map(|tabu| {
