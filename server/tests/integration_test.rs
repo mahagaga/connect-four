@@ -13,25 +13,24 @@ fn it_works() {
     let server = TestServer::new();
     let client = hyper::Client::new();
 
-    fn check_response(q:&str, a:&str, s:&TestServer, c: &hyper::Client) {
+    fn check_response<'a>(q:&str, a:&str, s:&TestServer, c: &hyper::Client) -> Vec<String>  {
         let url = format!("{}/{}", s.url(), q);
         let mut response = c.get(&url).send().unwrap();
-        let mut s = String::new();
-        response.read_to_string(&mut s).unwrap();
+        let mut rs = String::new();
+        response.read_to_string(&mut rs).unwrap();
 
         let expectation = Regex::new(a).unwrap();
-        println!("{}", s);
-        assert!(expectation.is_match(s.as_str()));
+        println!("{} -> {}", q, rs);
+        assert!(expectation.is_match(rs.as_str()));
+        
+        let caps = expectation.captures(rs.as_str()).unwrap();
+        caps.iter().map(|m| String::from(m.unwrap().as_str())).collect()
     }
 
-    for (question, answer) in vec![
-        ("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": [0-9]+ [}]"),
-        ("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": [0-9]+ [}]"),
-//        ("move/?/black/4", "[{] \"field\": \"-{6}([\\\\]n){5}o([\\\\]n){3}-{6}\" [}]"),
-//        ("move/?/black/5", "[{] \"field\": \"-{6}([\\\\]n){6}x([\\\\]n){5}-{6}\" [}]"),
-    ] {
-        check_response(question, answer, &server, &client)
-    }
+    let gameid1 = check_response("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": ([0-9]+) [}]", &server, &client).pop().unwrap();
+    let gameid2 = check_response("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": ([0-9]+) [}]", &server, &client).pop().unwrap();
+    check_response(format!("move/{}/white/4", gameid1).as_str(), "[{] \"field\": \"-{6}([\\\\]n){5}x([\\\\]n){3}-{6}\" [}]", &server, &client);
+    check_response(format!("move/{}/black/5", gameid2).as_str(), "[{] \"field\": \"-{6}([\\\\]n){6}o([\\\\]n){2}-{6}\" [}]", &server, &client);
 }
 
 struct TestServer(Listening);
