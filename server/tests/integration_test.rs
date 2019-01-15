@@ -1,9 +1,11 @@
 extern crate server;
+extern crate game;
 extern crate iron;
 extern crate hyper;
 extern crate regex;
 
 use server::start_server;
+use game::ConnectFourStrategy;
 use iron::Listening;
 use std::io::Read;
 use regex::Regex;
@@ -37,7 +39,7 @@ struct TestServer(Listening);
 
 impl TestServer {
     fn new() -> TestServer {
-        TestServer(start_server("127.0.0.1", 0))
+        TestServer(start_server("127.0.0.1", 0, ConnectFourStrategy::default()))
     }
 
     fn url(&self) -> String {

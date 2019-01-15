@@ -538,6 +538,18 @@ struct Tabu {
 }
 
 impl ConnectFourStrategy {
+    pub fn default() -> Self {
+        ConnectFourStrategy { 
+            mscore_koeff: 1.0,
+            oscore_koeff: 0.8,
+            nscore_koeff: 0.5,
+            me_my_tabu_koeff: 0.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
+            them_opp_tabu_koeff: 0.0,
+        }
+    }
+
     // comparing tabu rows before and after the move
     fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player, mv: Rc<Move<Column>>)  -> f32 {

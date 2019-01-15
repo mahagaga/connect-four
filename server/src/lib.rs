@@ -145,19 +145,11 @@ impl Handler for ConnectFourHandler {
     }
 }
 
-pub fn start_server(host:&str, port:i32) -> iron::Listening {
+pub fn start_server(host:&str, port:i32, strategy:ConnectFourStrategy) -> iron::Listening {
     let server = Iron::new(ConnectFourHandler {
         zero: Instant::now(),
         cfm: Mutex::new(HashMap::new()),
-        st: ConnectFourStrategy { 
-            mscore_koeff: 1.0,
-            oscore_koeff: 0.8,
-            nscore_koeff: 0.5,
-            me_my_tabu_koeff: 0.0,
-            me_opp_tabu_koeff: 0.0,
-            them_my_tabu_koeff: 0.0,
-            them_opp_tabu_koeff: 0.0,
-        }
+        st: strategy,
     }).http(format!("{}:{}", host, port)).unwrap();
     server
 }
