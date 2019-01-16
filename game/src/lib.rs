@@ -492,6 +492,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
     -> Result<f32, Withdraw> {
         let n = mv.data().to_usize();
         let m = g.borrow().state()[n].len();
+        if m >= ConnectFour::height() { return Err(Withdraw::NotAllowed); }
 
         // fill evaluation field with empty cells
         let mut efield = Vec::with_capacity(ConnectFour::width());
@@ -546,11 +547,11 @@ impl ConnectFourStrategy {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
-            me_my_tabu_koeff: 0.0,
-            me_opp_tabu_koeff: 0.0,
-            them_my_tabu_koeff: 0.0,
-            them_opp_tabu_koeff: 0.0,
-            defense_koeff: 0.0,
+            me_my_tabu_koeff: 10.0,
+            me_opp_tabu_koeff: 10.0,
+            them_my_tabu_koeff: 10.0,
+            them_opp_tabu_koeff: 10.0,
+            defense_koeff: 1.0,
         }
     }
 

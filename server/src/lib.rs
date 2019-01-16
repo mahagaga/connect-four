@@ -130,7 +130,7 @@ impl Handler for ConnectFourHandler {
         }
         if let Some(cfclone) = best_move_clone {
             if let (Some(_), Some(player), _) = readurl(&req) {
-                if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 4, true) {
+                if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 6, true) {
                     answer = Some(format!("{{ \"bestmove\": {} }}", mv.data().to_usize()));
                 }
             }                    

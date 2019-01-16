@@ -273,6 +273,43 @@ xo
 
 }
 
+#[test]
+fn evaluate_complex_move() {
+    let strategy = ConnectFourStrategy::default();
+    let game = replicate_game("------
+ox
+ooxo
+x
+oxooox
+xxoxxx
+
+oxo
+------");
+    let g = Rc::new(RefCell::new(game));
+    for u in 0..7 {
+        println!("{:?} {}",
+            Column::from_usize(u),
+            strategy.evaluate_move(g.clone(),
+                &Player::White,
+                Rc::new(ConnectFourMove { data: Column::from_usize(u) }
+            )).unwrap_or(0.0)
+        );
+    }
+    match strategy.find_best_move(g.clone(), &Player::White, 10, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?} {:?}", mv.data(), score);
+        },
+        _ => assert!(false),
+    }
+    match strategy.find_best_move(g.clone(), &Player::White, 9, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?} {:?}", mv.data(), score);
+            assert!(false)
+        },
+        _ => assert!(false),
+    }
+}
+
 fn assert_best_move(strategy: Option<ConnectFourStrategy>,
                     game: ConnectFour, player: &Player,
                     col: Column, score: Score) {
