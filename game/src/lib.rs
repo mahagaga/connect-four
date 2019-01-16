@@ -260,8 +260,8 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         for c in &self.field {
             for x in c {
                 match x {
-                    Some(p) => match p { Player::White => { s.push_str("x"); },
-                                         Player::Black => { s.push_str("o"); },
+                    Some(p) => match p { Player::White => { s.push_str("o"); },
+                                         Player::Black => { s.push_str("x"); },
                     },
                     None => (),
                 }
@@ -444,7 +444,7 @@ impl ConnectFourStrategy {
             for i in 0..ConnectFour::width() {
                 print!("{}", match ef[i][j] {
                     Cell::N => ".",
-                    Cell::M => "x",
+                    Cell::M => "m",
                     Cell::O => "o",
                 })
             }

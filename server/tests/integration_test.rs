@@ -31,8 +31,8 @@ fn it_works() {
 
     let gameid1 = check_response("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": ([0-9]+) [}]", &server, &client).pop().unwrap();
     let gameid2 = check_response("new", "[{] \"field\": \"-{6}([\\\\]n){8}-{6}\", \"gameid\": ([0-9]+) [}]", &server, &client).pop().unwrap();
-    check_response(format!("move/{}/white/4", gameid1).as_str(), "[{] \"field\": \"-{6}([\\\\]n){5}x([\\\\]n){3}-{6}\" [}]", &server, &client);
-    check_response(format!("move/{}/black/5", gameid2).as_str(), "[{] \"field\": \"-{6}([\\\\]n){6}o([\\\\]n){2}-{6}\" [}]", &server, &client);
+    check_response(format!("move/{}/white/4", gameid1).as_str(), "[{] \"field\": \"-{6}([\\\\]n){5}o([\\\\]n){3}-{6}\" [}]", &server, &client);
+    check_response(format!("move/{}/black/5", gameid2).as_str(), "[{] \"field\": \"-{6}([\\\\]n){6}x([\\\\]n){2}-{6}\" [}]", &server, &client);
 }
 
 struct TestServer(Listening);
