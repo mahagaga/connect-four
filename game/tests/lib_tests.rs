@@ -310,6 +310,38 @@ oxo
     }
 }
 
+#[test]
+fn find_complex_winner() {
+    let strategy = ConnectFourStrategy::default();
+    let game = replicate_game("------
+
+xx
+xoxo
+oxooxo
+xxoo
+ox
+
+------");
+    let g = Rc::new(RefCell::new(game));
+    match strategy.find_best_move(g.clone(), &Player::White, 8, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?} {:?}", mv.data(), score);
+        },
+        _ => assert!(false),
+    }
+    match strategy.find_best_move(g.clone(), &Player::White, 6, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?} {:?}", mv.data(), score);
+            assert_eq!(*mv.data(), Column::Six);
+            match score {
+                Score::Won(n) => assert_eq!(n, 3),
+                _ => assert!(false),
+            }
+        },
+        _ => assert!(false),
+    }
+}
+
 fn assert_best_move(strategy: Option<ConnectFourStrategy>,
                     game: ConnectFour, player: &Player,
                     col: Column, score: Score) {
