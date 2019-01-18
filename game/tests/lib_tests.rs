@@ -248,9 +248,9 @@ fn test_evaluate_tabu_move() {
         mscore_koeff: 0.0,
         oscore_koeff: 0.0,
         nscore_koeff: 0.0,
-        me_my_tabu_koeff: 1.0,
+        me_my_tabu_koeff: -1.0,
         me_opp_tabu_koeff: 2.0,
-        them_my_tabu_koeff: 4.0,
+        them_my_tabu_koeff: -4.0,
         them_opp_tabu_koeff: 8.0,
         defense_koeff: 0.5,
     };
@@ -275,7 +275,17 @@ xo
 
 #[test]
 fn evaluate_complex_move() {
-    let strategy = ConnectFourStrategy::default();
+    let strategy = ConnectFourStrategy {
+        mscore_koeff: 1.0,
+        oscore_koeff: 0.8,
+        nscore_koeff: 0.5,
+        me_my_tabu_koeff: 10.0,
+        me_opp_tabu_koeff: 0.0,
+        them_my_tabu_koeff: 0.0,
+        them_opp_tabu_koeff: 10.0,
+        defense_koeff: 0.25,
+    };
+
     let game = replicate_game("------
 ox
 ooxo
@@ -302,9 +312,10 @@ oxo
         _ => assert!(false),
     }
     match strategy.find_best_move(g.clone(), &Player::White, 9, true) {
-        (Some(mv), Some(score)) => {
+        (Some(mv), Some(Score::Undecided(score))) => {
             println!("{:?} {:?}", mv.data(), score);
-            assert!(false)
+            assert_eq!(*mv.data(), Column::Two);
+            assert_eq!(score, 4.0);
         },
         _ => assert!(false),
     }
@@ -323,18 +334,25 @@ ox
 
 ------");
     let g = Rc::new(RefCell::new(game));
-    match strategy.find_best_move(g.clone(), &Player::White, 8, true) {
-        (Some(mv), Some(score)) => {
-            println!("{:?} {:?}", mv.data(), score);
-        },
-        _ => assert!(false),
-    }
     match strategy.find_best_move(g.clone(), &Player::White, 6, true) {
         (Some(mv), Some(score)) => {
             println!("{:?} {:?}", mv.data(), score);
+            // any winning move is fine, column One does it in 6 
+            // or even 8 steps if that many are considered ...
+            match score {
+                Score::Won(n) => assert_eq!(n, 6),
+                _ => assert!(false),
+            }
+       },
+        _ => assert!(false),
+    }
+    match strategy.find_best_move(g.clone(), &Player::White, 3, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?} {:?}", mv.data(), score);
+            // ... but under increased pressure the way to victory shortens:
             assert_eq!(*mv.data(), Column::Six);
             match score {
-                Score::Won(n) => assert_eq!(n, 3),
+                Score::Won(n) => assert_eq!(n, 2),
                 _ => assert!(false),
             }
         },

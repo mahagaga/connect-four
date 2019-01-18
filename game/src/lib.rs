@@ -243,7 +243,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         } else {
             self.field[n].push(match p {
                 Player::White => Some(Player::White),
-                Player::Black => Some(Player::Black), 
+                Player::Black => Some(Player::Black),
             });
             self.get_score(p, n, self.field[n].len()-1)
         }
@@ -529,16 +529,10 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
 }
 
 #[derive(Debug)]
-enum Who {
-    Me,
-    Them,
-}
-
-#[derive(Debug)]
 struct Tabu {
     column: Column,
-    me_first: Option<(Who,u32)>,
-    opp_first: Option<(Who,u32)>,
+    mine: Option<u32>,
+    theirs: Option<u32>,
 }
 
 impl ConnectFourStrategy {
@@ -548,10 +542,10 @@ impl ConnectFourStrategy {
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
             me_my_tabu_koeff: 10.0,
-            me_opp_tabu_koeff: 10.0,
-            them_my_tabu_koeff: 10.0,
+            me_opp_tabu_koeff: 0.0,
+            them_my_tabu_koeff: 0.0,
             them_opp_tabu_koeff: 10.0,
-            defense_koeff: 1.0,
+            defense_koeff: 0.25,
         }
     }
 
@@ -561,11 +555,11 @@ impl ConnectFourStrategy {
         let ground_score = self.tabu_score(Rc::clone(&g), p);
 
         g.borrow_mut().make_move(p, Rc::clone(&mv)).unwrap();
-        let offense_score = ground_score - self.tabu_score(Rc::clone(&g), p);     
+        let offense_score = self.tabu_score(Rc::clone(&g), p) - ground_score;     
         g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
 
         g.borrow_mut().make_move(p.opponent(), Rc::clone(&mv)).unwrap();
-        let defense_score = ground_score - self.tabu_score(Rc::clone(&g), p);     
+        let defense_score = self.tabu_score(Rc::clone(&g), p) - ground_score;     
         g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&mv));
         
         offense_score - defense_score * self.defense_koeff
@@ -579,19 +573,24 @@ impl ConnectFourStrategy {
         .map(|col| {
             // look for tabus
             let mut tabu = Tabu{ column: Column::from_usize(col),
-                                 me_first: None, opp_first: None, };
+                                 mine: None, theirs: None, };
             let mut cp = p;
             let mut i = 0;
             while let Ok(score) = mutable_game.make_move(cp, Rc::new(
                     ConnectFourMove { data: Column::from_usize(col) })) {
+                cp = cp.opponent();
+                i += 1;
                 match score {
-                    Score::Won(_) => { 
-                        tabu.me_first = Some((match i%2 { 0 => Who::Them, _ => Who::Me, }, i));
+                    Score::Won(_) => {
+                        match i%2 {
+                            0 => { tabu.mine = Some(i-1); },
+                            _ => (),
+                        }
+                        //tabu.me_first = Some((match i%2 { 1 => Who::Them, _ => Who::Me, }, i-1));
+                        break;
                     },
                     _ => (),
                 }
-                cp = cp.opponent();
-                i += 1;
             }
             //println!("{}", mutable_game.display());
             for _ in 0..i {
@@ -604,14 +603,19 @@ impl ConnectFourStrategy {
             let mut i = 0;
             while let Ok(score) = mutable_game.make_move(cp, Rc::new(
                     ConnectFourMove { data: Column::from_usize(col) })) {
+                cp = cp.opponent();
+                i += 1;
                 match score {
                     Score::Won(_) => { 
-                        tabu.opp_first = Some((match i%2 { 0 => Who::Me, _ => Who::Them, }, i));
+                        match i%2 {
+                            0 => { tabu.theirs = Some(i-1); },
+                            _ => (),
+                        }
+                        //tabu.opp_first = Some((match i%2 { 1 => Who::Me, _ => Who::Them, }, i-1));
+                        break;
                     },
                     _ => (),
                 }
-                cp = cp.opponent();
-                i += 1;
             }
             //println!("{}", mutable_game.display());
             for _ in 0..i {
@@ -620,18 +624,20 @@ impl ConnectFourStrategy {
                     ConnectFourMove { data: Column::from_usize(col) }));
             }
             
-            //println!("{:?}", &tabu);
+            if let Some(_) = tabu.mine {
+                //println!("{:?}", &tabu);
+            } else if let Some(_) = tabu.theirs {
+                //println!("{:?}", &tabu);
+            }
             tabu
         })
         .map(|tabu| {
-            let mine = match tabu.me_first {
-                Some((Who::Me, _when)) => self.me_my_tabu_koeff as f32,
-                Some((Who::Them, _when)) => - self.me_opp_tabu_koeff as f32,
+            let mine = match tabu.mine {
+                Some(i) => self.me_my_tabu_koeff / i as f32,
                 None => 0.0,
             };
-            let theirs = match tabu.opp_first {
-                Some((Who::Me, _when)) => self.them_my_tabu_koeff as f32,
-                Some((Who::Them, _when)) => - self.them_opp_tabu_koeff as f32,
+            let theirs = match tabu.theirs {
+                Some(i) => self.them_opp_tabu_koeff / i as f32,
                 None => 0.0,
             };
             mine + theirs
