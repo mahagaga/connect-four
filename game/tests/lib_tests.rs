@@ -279,7 +279,7 @@ fn evaluate_complex_move() {
         mscore_koeff: 1.0,
         oscore_koeff: 0.8,
         nscore_koeff: 0.5,
-        me_my_tabu_koeff: 10.0,
+        me_my_tabu_koeff: -10.0,
         me_opp_tabu_koeff: 0.0,
         them_my_tabu_koeff: 0.0,
         them_opp_tabu_koeff: 10.0,
