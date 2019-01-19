@@ -95,6 +95,7 @@ impl Handler for ConnectFourHandler {
                 },
                 "move" => {
                     if let (Some(gameid), Some(player), Some(column)) = readurl(&req) {
+                        println!("{} {} {:?}", gameid, player, column);
                         // move game out of map ...
                         let mut cfg = (*cfm).remove(&gameid).unwrap();
                         if let Ok(_) = cfg.drop_stone(&player, column) {
@@ -153,12 +154,12 @@ impl Handler for ConnectFourHandler {
                     let now = Instant::now();
                     let tp = now.duration_since(then).as_secs() as u128 * 1000 + now.duration_since(then).subsec_millis() as u128;
                     
-                    println!("best move scores {:?} pondering time was {}", score, tp);
+                    println!("{} best move scores {:?} pondering time was {}", key, score, tp);
 
                     if tp < RESPITE {
                         let mut lam = self.lam.lock().unwrap();
                         (*lam).insert(key, lookahead+1);
-                        println!("set new lookahead for {}: {}", key, (*lam).get(&key).unwrap());
+                        println!("{} set new lookahead: {}", key, (*lam).get(&key).unwrap());
                     }
 
                 }
