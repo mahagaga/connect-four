@@ -27,6 +27,7 @@ use hyper::header::AccessControlAllowOrigin;
 
 const STARTN:i32 = 6;
 const RESPITE:u128 = 500;
+const TOLERABLE:u128 = 3500;
 
 impl Handler for ConnectFourHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
@@ -159,6 +160,11 @@ impl Handler for ConnectFourHandler {
                     if tp < RESPITE {
                         let mut lam = self.lam.lock().unwrap();
                         (*lam).insert(key, lookahead+1);
+                        println!("{} set new lookahead: {}", key, (*lam).get(&key).unwrap());
+                    }
+                    if tp > TOLERABLE {
+                        let mut lam = self.lam.lock().unwrap();
+                        (*lam).insert(key, lookahead-1);
                         println!("{} set new lookahead: {}", key, (*lam).get(&key).unwrap());
                     }
 

@@ -317,7 +317,7 @@ oxo
 fn evaluate_another_complex_move() {
     let strategy = ConnectFourStrategy {
         mscore_koeff: 1.0,
-        oscore_koeff: 0.6,
+        oscore_koeff: 0.8,
         nscore_koeff: 0.5,
         my_tabu_koeff: -10.0,
         opp_tabu_koeff: 10.0,
@@ -343,7 +343,14 @@ ox
             )).unwrap_or(0.0)
         );
     }
-    assert!(false)
+    match strategy.find_best_move(g.clone(), &Player::White, 4, true) {
+        (Some(mv), Some(Score::Undecided(score))) => {
+            println!("{:?} {:?}", mv.data(), score);
+            assert_eq!(*mv.data(), Column::One);
+            assert_eq!(score, 6.7);
+        },
+        _ => assert!(false),
+    }
 }
 
 #[test]
