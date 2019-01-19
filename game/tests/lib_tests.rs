@@ -86,11 +86,9 @@ fn test_find_best_move() {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
-            me_my_tabu_koeff: 0.0,
-            me_opp_tabu_koeff: 0.0,
-            them_my_tabu_koeff: 0.0,
-            them_opp_tabu_koeff: 0.0,
-            defense_koeff: 0.0,
+            my_tabu_koeff: 0.0,
+            opp_tabu_koeff: 0.0,
+            tabu_defense_koeff: 0.0,
     };
 
     // recognize a winner
@@ -183,11 +181,9 @@ fn test_evaluate_move() {
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
-            me_my_tabu_koeff: 0.0,
-            me_opp_tabu_koeff: 0.0,
-            them_my_tabu_koeff: 0.0,
-            them_opp_tabu_koeff: 0.0,
-            defense_koeff: 0.0,
+            my_tabu_koeff: 0.0,
+            opp_tabu_koeff: 0.0,
+            tabu_defense_koeff: 0.0,
     };
 
     let expected = 10 as f32 * s.mscore_koeff * s.nscore_koeff
@@ -248,11 +244,9 @@ fn test_evaluate_tabu_move() {
         mscore_koeff: 0.0,
         oscore_koeff: 0.0,
         nscore_koeff: 0.0,
-        me_my_tabu_koeff: -1.0,
-        me_opp_tabu_koeff: 2.0,
-        them_my_tabu_koeff: -4.0,
-        them_opp_tabu_koeff: 8.0,
-        defense_koeff: 0.5,
+        my_tabu_koeff: -1.0,
+        opp_tabu_koeff: 8.0,
+        tabu_defense_koeff: 0.5,
     };
     let game = replicate_game("------
 ox
@@ -279,11 +273,9 @@ fn evaluate_complex_move() {
         mscore_koeff: 1.0,
         oscore_koeff: 0.8,
         nscore_koeff: 0.5,
-        me_my_tabu_koeff: -10.0,
-        me_opp_tabu_koeff: 0.0,
-        them_my_tabu_koeff: 0.0,
-        them_opp_tabu_koeff: 10.0,
-        defense_koeff: 0.25,
+        my_tabu_koeff: -10.0,
+        opp_tabu_koeff: 10.0,
+        tabu_defense_koeff: 0.25,
     };
 
     let game = replicate_game("------
@@ -327,11 +319,9 @@ fn evaluate_another_complex_move() {
         mscore_koeff: 1.0,
         oscore_koeff: 0.6,
         nscore_koeff: 0.5,
-        me_my_tabu_koeff: -10.0,
-        me_opp_tabu_koeff: 0.0,
-        them_my_tabu_koeff: 0.0,
-        them_opp_tabu_koeff: 10.0,
-        defense_koeff: 0.25,
+        my_tabu_koeff: -10.0,
+        opp_tabu_koeff: 10.0,
+        tabu_defense_koeff: 0.25,
     };
 
     let game = replicate_game("------
@@ -404,11 +394,9 @@ fn assert_best_move(strategy: Option<ConnectFourStrategy>,
             mscore_koeff: 1.0,
             oscore_koeff: 0.8,
             nscore_koeff: 0.5,
-            me_my_tabu_koeff: 0.0,
-            me_opp_tabu_koeff: 0.0,
-            them_my_tabu_koeff: 0.0,
-            them_opp_tabu_koeff: 0.0,
-            defense_koeff: 0.0,
+            my_tabu_koeff: 0.0,
+            opp_tabu_koeff: 0.0,
+            tabu_defense_koeff: 0.0,
         },
     };
     
