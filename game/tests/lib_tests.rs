@@ -322,6 +322,41 @@ oxo
 }
 
 #[test]
+fn evaluate_another_complex_move() {
+    let strategy = ConnectFourStrategy {
+        mscore_koeff: 1.0,
+        oscore_koeff: 0.6,
+        nscore_koeff: 0.5,
+        me_my_tabu_koeff: -10.0,
+        me_opp_tabu_koeff: 0.0,
+        them_my_tabu_koeff: 0.0,
+        them_opp_tabu_koeff: 10.0,
+        defense_koeff: 0.25,
+    };
+
+    let game = replicate_game("------
+
+
+
+oxooox
+xxox
+
+ox
+------");
+    let g = Rc::new(RefCell::new(game));
+    for u in 0..7 {
+        println!("{:?} {}",
+            Column::from_usize(u),
+            strategy.evaluate_move(g.clone(),
+                &Player::White,
+                Rc::new(ConnectFourMove { data: Column::from_usize(u) }
+            )).unwrap_or(0.0)
+        );
+    }
+    assert!(false)
+}
+
+#[test]
 fn find_complex_winner() {
     let strategy = ConnectFourStrategy::default();
     let game = replicate_game("------

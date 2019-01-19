@@ -19,10 +19,14 @@ use std::thread::sleep;
 struct ConnectFourHandler {
     zero: Instant,
     cfm: Mutex<HashMap<u128,ConnectFour>>,
+    lam: Mutex<HashMap<u128,i32>>,
     st: ConnectFourStrategy,
 }
 
 use hyper::header::AccessControlAllowOrigin;
+
+const STARTN:i32 = 6;
+const RESPITE:u128 = 500;
 
 impl Handler for ConnectFourHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
@@ -73,13 +77,19 @@ impl Handler for ConnectFourHandler {
         let mut evaluation_clone:Option<ConnectFour> = None;
         let mut best_move_clone:Option<ConnectFour> = None;
 
+        let mut key = 0;
         if let Some(s) = &req.url.path().get(0) {
             let mut cfm = self.cfm.lock().unwrap();
 
             match **s {
                 "new" => {
-                    let key = key_from_time(&(*cfm), self.zero);
+                    key = key_from_time(&(*cfm), self.zero);
+
                     (*cfm).insert(key, ConnectFour::new());
+
+                    let mut lam = self.lam.lock().unwrap();
+                    (*lam).insert(key, STARTN);
+                    
                     // answer must be proper JSON (", no ', \\n, no \n) for ajax
                     answer = Some(format!("{{ \"field\": \"{}\", \"gameid\": {} }}", (*cfm).get(&key).unwrap().display().replace("\n", "\\n"), key));
                 },
@@ -112,6 +122,7 @@ impl Handler for ConnectFourHandler {
                 "best" => {
                     if let Some(id) = &req.url.path().get(1) {
                         if let Ok(gameid) = (**id).parse::<u128>() {
+                            key = gameid;
                             best_move_clone = Some((*cfm).get(&gameid).unwrap().clone());
                         }
                     }   
@@ -129,10 +140,29 @@ impl Handler for ConnectFourHandler {
             }
         }
         if let Some(cfclone) = best_move_clone {
+            let lookahead;
+            {
+                let lam = self.lam.lock().unwrap();
+                lookahead = match (*lam).get(&key){ None => STARTN, Some(n) => *n };
+            }
             if let (Some(_), Some(player), _) = readurl(&req) {
-                if let (Some(mv), Some(_score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, 6, true) {
+                let then = Instant::now();
+                if let (Some(mv), Some(score)) = self.st.find_best_move(Rc::new(RefCell::new(cfclone)), &player, lookahead, true) {
                     answer = Some(format!("{{ \"bestmove\": {} }}", mv.data().to_usize()));
+
+                    let now = Instant::now();
+                    let tp = now.duration_since(then).as_secs() as u128 * 1000 + now.duration_since(then).subsec_millis() as u128;
+                    
+                    println!("best move scores {:?} pondering time was {}", score, tp);
+
+                    if tp < RESPITE {
+                        let mut lam = self.lam.lock().unwrap();
+                        (*lam).insert(key, lookahead+1);
+                        println!("set new lookahead for {}: {}", key, (*lam).get(&key).unwrap());
+                    }
+
                 }
+
             }                    
         }
 
@@ -149,6 +179,7 @@ pub fn start_server(host:&str, port:i32, strategy:ConnectFourStrategy) -> iron::
     let server = Iron::new(ConnectFourHandler {
         zero: Instant::now(),
         cfm: Mutex::new(HashMap::new()),
+        lam: Mutex::new(HashMap::new()),
         st: strategy,
     }).http(format!("{}:{}", host, port)).unwrap();
     server
