@@ -435,6 +435,7 @@ enum Cell {
     M, //my stone
     O, //opponent's stone
     N, //no stone, empty cell
+    D, //dead cell, game will be over before it is occupied
 }
 
 impl ConnectFourStrategy {
@@ -446,6 +447,7 @@ impl ConnectFourStrategy {
                     Cell::N => ".",
                     Cell::M => "m",
                     Cell::O => "o",
+                    Cell::D => ":",
                 })
             }
             println!("|")
@@ -469,6 +471,7 @@ impl ConnectFourStrategy {
                              if let None = first_mine { o_count += 1; }},
                 Cell::N => { if let None = first_mine { no_count += 1; }
                              if let None = first_opponent { nm_count += 1; }},
+                Cell::D => { break; },
             }
             count += 1;
         }
@@ -508,7 +511,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         let black = |player: &Player| { match player { Player::Black => Cell::M, Player::White => Cell::O }};
         let white = |player: &Player| { match player { Player::White => Cell::M, Player::Black => Cell::O }};
         let mut i:usize = 0;
-        for c in  g.borrow().state() { // that's the current Connect Four field
+        for c in g.borrow().state() { // that's the current Connect Four field
             let mut j:usize = 0;
             for f in c {
                 match f {
@@ -521,9 +524,12 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
             i += 1;
         }
         
+        // identify dead cells
+        let efield = self.fill_in_dead_cells(Rc::clone(&g), efield);
+
+        // calculate score
         let total_score = self.positional_score(n, m, &efield)
                         + self.tabu_diff_score(g, p, mv);
-
         Ok(total_score)
     }
 }
@@ -545,6 +551,42 @@ impl ConnectFourStrategy {
             opp_tabu_koeff: 10.0,
             tabu_defense_koeff: 0.25,
         }
+    }
+
+    fn fill_in_dead_cells(&self, 
+            g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+            mut efield: Vec<Vec<Cell>>)  -> Vec<Vec<Cell>> {
+        let mut mutable_game = g.borrow_mut();
+        
+        let mut cp = &Player::White;
+        for col in 0..ConnectFour::width() {
+            // look for mutual tabus
+            let mut mv = Rc::new(ConnectFourMove {
+                data: Column::from_usize(col) 
+            });
+            let mut i = 0;
+            while let Ok(score) = mutable_game.make_move(cp, mv.clone()) {
+                i += 1;
+                if let Score::Won(_) = score {
+                    mutable_game.withdraw_move(cp, mv.clone());
+                    cp = cp.opponent();
+                    if let Score::Won(_) = mutable_game.make_move(cp, mv.clone()).unwrap() {
+                        for j in mutable_game.state()[col].len()..ConnectFour::height() {
+                            efield[col][j] = Cell::D;
+                        }
+                        break;
+                    }
+                    
+                }
+                cp = cp.opponent();
+            }
+            //println!("{}", mutable_game.display());
+            for _ in 0..i {
+                cp = cp.opponent();
+                mutable_game.withdraw_move(cp, mv.clone());
+            }
+        }
+        efield
     }
 
     // comparing tabu rows before and after the move
