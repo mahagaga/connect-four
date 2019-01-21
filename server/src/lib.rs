@@ -26,8 +26,8 @@ struct ConnectFourHandler {
 use hyper::header::AccessControlAllowOrigin;
 
 const STARTN:i32 = 6;
-const RESPITE:u128 = 500;
-const TOLERABLE:u128 = 3500;
+const RESPITE:u128 = 400;
+const TOLERABLE:u128 = 2800;
 
 impl Handler for ConnectFourHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
@@ -80,7 +80,12 @@ impl Handler for ConnectFourHandler {
 
         let mut key = 0;
         if let Some(s) = &req.url.path().get(0) {
-            let mut cfm = self.cfm.lock().unwrap();
+            // the guard must stay in scope until the map can be released.
+            // let mut cfm = self.cfm.lock().unwrap()
+            // won't do! the guard wouldn't be in scope anymore leaving the map
+            // subject to racing conditions.
+            let guard = self.cfm.lock();
+            let mut cfm = guard.unwrap();
 
             match **s {
                 "new" => {
@@ -133,7 +138,8 @@ impl Handler for ConnectFourHandler {
             }
         }
 
-        // by now the lock on cfc is released, so the possibly expensive calculations below do not inhibit other threads
+        // by now the lock on cfm is released for the guard went out of scope
+        // so the possibly expensive calculations below do not inhibit other threads
         if let Some(cfclone) = evaluation_clone {
             if let (Some(_), Some(player), Some(column)) = readurl(&req) {
                 if let Ok(eval) = self.st.evaluate_move(Rc::new(RefCell::new(cfclone)), &player, Rc::new(ConnectFourMove{ data: column, })) {

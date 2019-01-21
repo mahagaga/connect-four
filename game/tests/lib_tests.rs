@@ -333,21 +333,46 @@ xxox
 
 ox
 ------");
+    complex_evaluation(game, &strategy, &Player::White, Column::One, 6.7);
+
+    let _game = replicate_game("------
+o
+xxox
+xoxxxo
+oooxox
+
+
+o
+------");
+    let game = replicate_game("------
+
+xxox
+x
+oooxo
+
+
+
+------");
+    complex_evaluation(game, &strategy, &Player::White, Column::Four, 9.7);
+}
+
+fn complex_evaluation(game:ConnectFour, strategy:&ConnectFourStrategy, player:&Player,
+                      expected_column:Column, expected_score:f32) {
     let g = Rc::new(RefCell::new(game));
     for u in 0..7 {
         println!("{:?} {}",
             Column::from_usize(u),
             strategy.evaluate_move(g.clone(),
-                &Player::White,
+                player,
                 Rc::new(ConnectFourMove { data: Column::from_usize(u) }
             )).unwrap_or(0.0)
         );
     }
-    match strategy.find_best_move(g.clone(), &Player::White, 4, true) {
+    match strategy.find_best_move(g.clone(), player, 4, true) {
         (Some(mv), Some(Score::Undecided(score))) => {
             println!("{:?} {:?}", mv.data(), score);
-            assert_eq!(*mv.data(), Column::One);
-            assert_eq!(score, 6.7);
+            assert_eq!(*mv.data(), expected_column);
+            assert_eq!(score, expected_score);
         },
         _ => assert!(false),
     }
@@ -391,6 +416,7 @@ ox
         _ => assert!(false),
     }
 }
+
 
 fn assert_best_move(strategy: Option<ConnectFourStrategy>,
                     game: ConnectFour, player: &Player,
