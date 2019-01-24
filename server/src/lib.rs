@@ -104,11 +104,18 @@ impl Handler for ConnectFourHandler {
                         println!("{} {} {:?}", gameid, player, column);
                         // move game out of map ...
                         let mut cfg = (*cfm).remove(&gameid).unwrap();
-                        if let Ok(_) = cfg.drop_stone(&player, column) {
+                        if let Ok(score) = cfg.drop_stone(&player, column) {
                             answer = Some(format!("{{ \"field\": \"{}\" }}", cfg.display().replace("\n", "\\n")));
+                            match score {
+                                // forget about if it's over
+                                Score::Won(0) => (),
+                                Score::Remis(0) => (),
+                                _ => { (*cfm).insert(gameid, cfg); }
+                            }
+                        } else {
+                            // ... and in again for gaining ownership
+                            (*cfm).insert(gameid, cfg);
                         }
-                        // ... and in again for gaining ownership
-                        (*cfm).insert(gameid, cfg);
                     }
                 },
                 "withdraw" => {

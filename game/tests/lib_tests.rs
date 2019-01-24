@@ -336,6 +336,20 @@ ox
     // this one is fixed by taking dead cells int account
     complex_evaluation(game, &strategy, &Player::White, Column::One, 6.7);
 
+
+    let game = replicate_game("------
+o
+x
+oox
+oxoxox
+x
+
+
+------");
+    // this is probably the losing move of White in the game against L.
+    complex_evaluation(game, &strategy, &Player::White, Column::Three, 22.0);
+
+    // the disaster:
     let _game = replicate_game("------
 o
 xxox
@@ -354,21 +368,9 @@ oooxo
 
 
 ------");
-    // this is where the game is lost against 'the app'.
+    // ... and the preceding move where the game is lost against 'the app'.
     // admittedly it's really hard to foresee the disaster.
     complex_evaluation(game, &strategy, &Player::White, Column::Four, 9.7);
-
-    let game = replicate_game("------
-o
-x
-oox
-oxoxox
-x
-
-
-------");
-    // this is probably the losing move of White in the game against L.
-    complex_evaluation(game, &strategy, &Player::White, Column::Three, 22.0);
 }
 
 fn complex_evaluation(game:ConnectFour, strategy:&ConnectFourStrategy, player:&Player,
