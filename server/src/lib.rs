@@ -88,6 +88,9 @@ impl Handler for ConnectFourHandler {
             let mut cfm = guard.unwrap();
 
             match **s {
+                "version" => {
+                    answer = Some(String::from("{ \"date\": \"2018-01-28\" }"));
+                },
                 "new" => {
                     key = key_from_time(&(*cfm), self.zero);
 
