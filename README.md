@@ -9,6 +9,21 @@ There are two crates
  e.g. a frontend web server, with JSON type data.
 
 ### Installation instructions
+
+* clone this reopository and connect-four-js, forked from bryanbraun/connect-four for the frontend
+
+```
+git clone https://github.com/scem/connect-four.git
+git clone https://github.com/scem/connect-four-js.git
+```
+
+* then you need rust installed
+if not and you're on Ubuntu you can just call:
+
+```
+curl https://sh.rustup.rs -sSf | sh
+```
+
 * you need a webserver running on your computer.
 if that's not the case and you're on Ubuntu you can just call:
 
@@ -16,21 +31,11 @@ if that's not the case and you're on Ubuntu you can just call:
 sudo apt install apache2
 ```
 
-* clone this reopository and connect-four-js, forked from bryanbraun/connect-four for the frontend
+* make the frontend visible in your webserver.
+for apache and Ubuntu call:
 
 ```
-git clone https://github.com/scem/connect-four.git
-git clone https://github.com/scem/connect-four-js.git
-cd connect-four-js.git
-checkout develop
-cd -
-```
-
-* then you need rust installed
-if not and you're on Ubuntu you can just call
-
-```
-curl https://sh.rustup.rs -sSf | sh
+ln -s `readlink -f connect-four-js` /var/www/html/connect-four
 ```
 
 * now you're ready for running the backend service
