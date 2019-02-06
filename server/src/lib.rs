@@ -80,12 +80,9 @@ impl Handler for ConnectFourHandler {
 
         let mut key = 0;
         if let Some(s) = &req.url.path().get(0) {
-            // the guard must stay in scope until the map can be released.
-            // let mut cfm = self.cfm.lock().unwrap()
-            // won't do! the guard wouldn't be in scope anymore leaving the map
-            // subject to racing conditions.
-            let guard = self.cfm.lock();
-            let mut cfm = guard.unwrap();
+            // the guard stays in scope until the map can be released.
+            // (the MutexGard is wrapped in the LockResult)
+            let mut cfm = self.cfm.lock().unwrap();
 
             match **s {
                 "version" => {

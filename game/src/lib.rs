@@ -570,6 +570,7 @@ impl ConnectFourStrategy {
                 if let Score::Won(_) = score {
                     mutable_game.withdraw_move(cp, mv.clone());
                     cp = cp.opponent();
+                    // unwrap in the next line assumed to be save because of the preceding withdrawal
                     if let Score::Won(_) = mutable_game.make_move(cp, mv.clone()).unwrap() {
                         for j in mutable_game.state()[col].len()..ConnectFour::height() {
                             efield[col][j] = Cell::D;
@@ -590,6 +591,7 @@ impl ConnectFourStrategy {
     }
 
     // comparing tabu rows before and after the move
+    // panicks if the move is not allowed
     fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player, mv: Rc<Move<Column>>)  -> f32 {
         let ground_score = self.tabu_score(Rc::clone(&g), p);
