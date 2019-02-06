@@ -5,7 +5,7 @@ extern crate hyper;
 extern crate regex;
 
 use server::start_server;
-use game::ConnectFourStrategy;
+use game::connectfour::ConnectFourStrategy;
 use iron::Listening;
 use std::io::Read;
 use regex::Regex;

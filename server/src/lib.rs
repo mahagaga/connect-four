@@ -1,5 +1,6 @@
 extern crate game;
-use game::*;
+use game::connectfour::*;
+use game::generic::*;
 
 extern crate iron;
 extern crate hyper;

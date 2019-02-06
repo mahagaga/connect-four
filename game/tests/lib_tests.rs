@@ -1,5 +1,6 @@
 extern crate game;
-use game::*;
+use game::connectfour::*;
+use game::generic::*;
 
 use std::rc::Rc;
 use std::cell::RefCell;
