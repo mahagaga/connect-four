@@ -1,20 +1,22 @@
 extern crate game;
 use game::bruteforce::BruteForceStrategy;
-use game::connectfour::*;
-use game::generic::*;
+use game::connectfour::{ConnectFour, Column};
+use game::generic::{Player,Strategy};
 
 
 use std::time::{Instant};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-fn time_pondering(game:&ConnectFour, nworker:i32, toplimit:i32, player:&Player) -> u64 {
-    let strategy = BruteForceStrategy::default();
+fn time_pondering(game:&ConnectFour, player:&Player, lookahead:i32, nworker:i32, toplimit:i32) -> u64 {
+    let strategy = BruteForceStrategy::new(nworker);
     let g = Rc::new(RefCell::new(game.clone()));
 
     let then = Instant::now();
 
-    match strategy.find_best_move(g.clone(), player, toplimit, true) {
+    strategy.pave_ground(g.clone(), player, toplimit);
+
+    match strategy.find_best_move(g.clone(), player, lookahead, true) {
         (Some(mv), Some(score)) => {
             println!("{:?} {:?}", mv.data(), score);
         },
@@ -24,11 +26,15 @@ fn time_pondering(game:&ConnectFour, nworker:i32, toplimit:i32, player:&Player) 
     let now = Instant::now();
     let tp = now.duration_since(then).as_secs();
     tp
-
 }
 
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::thread;
+
 fn main() {
+    
     let nworker = 3;
+    let lookahead = 4;
     let toplimit = 8;
     let player = Player::White;
     let games = [ConnectFour::new(), replicate_game("------
@@ -50,7 +56,7 @@ xo
 ------"), ];
     let _timep = games.iter()
     .map(|game| {
-        time_pondering(game, nworker, toplimit, &player)
+        time_pondering(game, &player, lookahead, nworker, toplimit)
     })
     .map(|tp| {
         println!("ran with {} workers, it took {} seconds", nworker, tp);
