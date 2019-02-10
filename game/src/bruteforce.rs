@@ -1,17 +1,16 @@
 //pub mod generic;
 use generic::{Game, Move, Player, Score, Strategy, Withdraw};
-use connectfour::{Column, ConnectFour};
+use connectfour::{Column, ConnectFour, NaiveStrategy};
 use std::rc::Rc;
 use std::cell::RefCell;
 
 
 pub struct BruteForceStrategy {
-    workers:Vec<Worker>,
+    workers:Vec<WorkerRadio>,
     control:Controller,
     query_receiver: Receiver<QueryM>,
-    record_sender: Vec<Sender<StoreM>>,
     done_receiver: Receiver<DoneM>,
-    job_sender: Vec<Sender<JobM>>,
+    report_receiver: Receiver<InterestingM>,
 }
 
 enum Eval {
@@ -34,7 +33,7 @@ enum ScoreEntry {
     Won,
     Lost,
     Draw,
-    InCalculation,
+//    InCalculation,
     Unknown,
     Missing,
 }
@@ -48,6 +47,11 @@ struct QueryM {
 struct StoreM {
     hash: Hash,
     score: ScoreEntry,
+}
+
+struct InterestingM {
+    worker_id: i32,
+    hash: Hash,
 }
 
 impl Store {
@@ -66,9 +70,16 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 struct Worker {
     worker_id: i32,
     query: Sender<QueryM>,
-    record: Receiver<StoreM>,
-    ctl_in: Receiver<JobM>,
+    record: Option<Receiver<StoreM>>,
+    report: Sender<InterestingM>,
+    ctl_in: Option<Receiver<JobM>>,
     ctl_out: Sender<DoneM>,
+}
+
+struct WorkerRadio {
+    worker_id: i32,
+    record: Sender<StoreM>,
+    ctl_in: Sender<JobM>,
 }
 
 fn hash(game:&ConnectFour) -> Hash {
@@ -76,113 +87,154 @@ fn hash(game:&ConnectFour) -> Hash {
 }
 
 impl Worker {
+    fn new(worker_id:i32, query:Sender<QueryM>, report:Sender<InterestingM>, ctl_out:Sender<DoneM>) -> Self {
+        Worker {
+            worker_id:worker_id,
+            query:query,
+            record:None,
+            report:report,
+            ctl_in:None,
+            ctl_out:ctl_out,
+        }
+
+    }
     fn parse_request(request:JobM) -> (ConnectFour,Player) {
         (ConnectFour::new(), Player::White)
     }
 
     fn get_entry(&self, hash:Hash) -> ScoreEntry {
-        ScoreEntry::InCalculation
+        ScoreEntry::Unknown
     }
 
-    fn treat_undecided(&self, undecided: Vec<std::rc::Rc<dyn Move<Column>>>, mut game: ConnectFour, player:&Player) {
+    fn treat_undecided(&self, undecided: Vec<std::rc::Rc<dyn Move<Column>>>, mut game: Rc<RefCell<ConnectFour>>, player:&Player) {
         let mut wins = Vec::new();
         let mut draws = Vec::new();
         let mut losses = Vec::new();
-        let mut open = Vec::new();
-        let mut incalculation = Vec::new();
+        let mut unknown = Vec::new();
+        let mut missing = Vec::new();
+/* The state InCalculation doesn't make sense in a strictly unsynchronized aproach
+   one cannot know when the record is changed... */
+//        let mut incalculation = Vec::new();
 
         for mv in undecided.iter() {
-            game.make_move(player, mv.clone()).unwrap();
-            match self.get_entry(hash(&game)) {
+            game.borrow_mut().make_move(player, mv.clone()).unwrap();
+            match self.get_entry(hash(&game.borrow())) {
                 ScoreEntry::Won => wins.push(mv.clone()),
                 ScoreEntry::Lost => losses.push(mv.clone()),
                 ScoreEntry::Draw => draws.push(mv.clone()),
-                ScoreEntry::InCalculation => incalculation.push(mv.clone()),
-                ScoreEntry::Unknown => open.push(mv.clone()),
-                ScoreEntry::Missing => open.push(mv.clone()),
+//                ScoreEntry::InCalculation => incalculation.push(mv.clone()),
+                ScoreEntry::Unknown => unknown.push(mv.clone()),
+                ScoreEntry::Missing => missing.push(mv.clone()),
             }
-            game.withdraw_move(&player, mv.clone());
+            game.borrow_mut().withdraw_move(&player, mv.clone());
         }
 
-        while let Some(mv) = incalculation.pop() {
-            game.make_move(player, mv.clone()).unwrap();
-            match self.get_entry(hash(&game)) {
+/*        while let Some(mv) = incalculation.pop() {
+            game.borrow_mut().make_move(player, mv.clone()).unwrap();
+            match self.get_entry(hash(&game.borrow())) {
                 ScoreEntry::Won => wins.push(mv.clone()),
                 ScoreEntry::Lost => losses.push(mv.clone()),
                 ScoreEntry::Draw => draws.push(mv.clone()),
                 ScoreEntry::InCalculation => incalculation.insert(0, mv.clone()),
-                ScoreEntry::Unknown => open.push(mv.clone()),
-                ScoreEntry::Missing => open.push(mv.clone()),
+                ScoreEntry::Unknown => unknown.push(mv.clone()),
+                ScoreEntry::Missing => missing.push(mv.clone()),
             }
-            game.withdraw_move(&player, mv.clone());
+            game.borrow_mut().withdraw_move(&player, mv.clone());
         }
-
+*/
         if wins.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game), }).unwrap();
-        } else if open.len()>0 {
-            
-
-
-
-
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
+            return
+        } 
+        while let Some(qm) = missing.pop() {
+            let naive = NaiveStrategy {};
+            if let (_, Some(score)) = naive.find_best_move(game.clone(), player, 4, false) {
+                match score {
+                    Score::Won(_) => {
+                        self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
+                        return
+                    },
+                    Score::Remis(_) => draws.push(qm.clone()),
+                    Score::Lost(_) => losses.push(qm.clone()),
+                    Score::Undecided(_) => unknown.push(qm.clone()),
+                }
+            }
+        }
+        unknown.iter().map(|mv|{
+            match game.borrow_mut().make_move(&player, mv.clone()) {
+                Ok(_) => {
+                    self.report.send(
+                        InterestingM { 
+                            worker_id: self.worker_id, 
+                            hash: hash(&game.borrow()) 
+                    }).unwrap();
+                    game.borrow_mut().withdraw_move(&player, mv.clone());
+                },
+                Err(_) => {
+                    panic!("shouldn't happen.");
+                },
+            };
+        }).collect::<Vec<_>>();
+        if unknown.len()>0 {
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Unknown, hash: hash(&game.borrow()), }).unwrap();
         } else if draws.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
         } else if losses.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game.borrow()), }).unwrap();
         }
     }
     
     fn get_it_done(&self, request:JobM) -> DoneM {
-        let (mut game, player) = Worker::parse_request(request);
+        let (game, player) = Worker::parse_request(request);
+        let game = Rc::new(RefCell::new(game));
         let mut wins = Vec::new();
         let mut draws = Vec::new();
         let mut losses = Vec::new();
         let mut undecided = Vec::new();
 
-        for mv in game.possible_moves(&player).iter() {
-            match game.make_move(&player, mv.clone()) {
+        for mv in game.borrow().possible_moves(&player).iter() {
+            match game.borrow_mut().make_move(&player, mv.clone()) {
                 Ok(Score::Won(_)) => wins.push(mv.clone()),
                 Ok(Score::Remis(_)) => draws.push(mv.clone()),
                 Ok(Score::Lost(_)) => losses.push(mv.clone()),
                 Ok(Score::Undecided(_)) => undecided.push(mv.clone()),
                 _ => (),
             }
-            game.withdraw_move(&player, mv.clone());
+            game.borrow_mut().withdraw_move(&player, mv.clone());
         }
 
         if wins.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
         } else if undecided.len()>0 {
             self.treat_undecided(undecided, game, &player);
         } else if draws.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
         } else if losses.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game.borrow()), }).unwrap();
         } else {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game), }).unwrap();
+            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
         }
         DoneM { worker_id: self.worker_id }
     }
 
-    fn new(worker_id: i32, query: Sender<QueryM>, record: Receiver<StoreM>, 
-           ctl_in: Receiver<JobM>, ctl_out: Sender<DoneM>) -> Self {
-        Worker {
-            worker_id: worker_id,
-            query: query,
-            record: record,
-            ctl_in: ctl_in,
-            ctl_out: ctl_out,
-        }
-    }
-
-    fn run(self) {
+    fn run(mut self) -> WorkerRadio {
+        let (record_s, record_r) = channel();
+        self.record = Some(record_r);
+        let (ctl_in_s, ctl_in_r) = channel();
+        //self.ctl_in = Some(ctl_in_r);
+        let wr = WorkerRadio {
+            worker_id: self.worker_id,
+            ctl_in:ctl_in_s.clone(),
+            record:record_s.clone(),
+        };
         let handle = thread::spawn(move || {
             while true {
-                let request:JobM = self.ctl_in.recv().unwrap();
+                let request:JobM = ctl_in_r.recv().unwrap();
                 let answer = self.get_it_done(request);
                 self.ctl_out.send(answer).unwrap()
             };
         });
+        wr
     }
 }
 struct Controller {
@@ -208,28 +260,23 @@ impl BruteForceStrategy {
     pub fn new(nworker:i32) -> Self {
         let (query_s, query_r) = channel();
         let (ctl_out_s, ctl_out_r) = channel();
+        let (report_s, report_r) = channel();
 
         let mut bfs = BruteForceStrategy { 
             workers: Vec::new(),
             query_receiver: query_r,
-            record_sender: Vec::new(),
             done_receiver: ctl_out_r,
-            job_sender: Vec::new(),
             control: Controller::new(),
+            report_receiver: report_r,
         };
         for worker_id in 0..nworker {
-            let (record_s, record_r) = channel();
-            bfs.record_sender.push(record_s);
-            let (ctl_in_s, ctl_in_r) = channel();
-            bfs.job_sender.push(ctl_in_s);
             
             bfs.workers.push(Worker::new(
                 worker_id,
                 query_s.clone(),
-                record_r,
-                ctl_in_r,
+                report_s.clone(),
                 ctl_out_s.clone()
-            ));
+            ).run());
         };
         bfs
     }

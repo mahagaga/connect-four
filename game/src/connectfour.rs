@@ -262,6 +262,13 @@ impl ConnectFour {
 }
 
 //### connect four strategy #######################################################################
+pub struct NaiveStrategy {}
+impl Strategy<Column,Vec<Vec<Option<Player>>>> for NaiveStrategy {
+    fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+                     p: &Player, mv: Rc<Move<Column>>) -> Result<f32,Withdraw> {
+        Ok(0.0)
+    }
+}
 
 pub struct ConnectFourStrategy {
     pub oscore_koeff: f32,

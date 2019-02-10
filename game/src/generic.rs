@@ -162,4 +162,3 @@ pub trait Strategy<T,S> {
         (None, None)
     }
 }
-
