@@ -87,7 +87,10 @@ fn hash(game:&ConnectFour) -> Hash {
 }
 
 impl Worker {
-    fn new(worker_id:i32, query:Sender<QueryM>, report:Sender<InterestingM>, ctl_out:Sender<DoneM>) -> Self {
+    fn new(worker_id:i32,
+            query:Sender<QueryM>,
+            report:Sender<InterestingM>,
+            ctl_out:Sender<DoneM>) -> Self {
         Worker {
             worker_id:worker_id,
             query:query,
@@ -96,8 +99,8 @@ impl Worker {
             ctl_in:None,
             ctl_out:ctl_out,
         }
-
     }
+
     fn parse_request(request:JobM) -> (ConnectFour,Player) {
         (ConnectFour::new(), Player::White)
     }
@@ -106,7 +109,10 @@ impl Worker {
         ScoreEntry::Unknown
     }
 
-    fn treat_undecided(&self, undecided: Vec<std::rc::Rc<dyn Move<Column>>>, mut game: Rc<RefCell<ConnectFour>>, player:&Player) {
+    fn treat_undecided(&self,
+            undecided: Vec<std::rc::Rc<dyn Move<Column>>>,
+            mut game: Rc<RefCell<ConnectFour>>,
+            player:&Player) {
         let mut wins = Vec::new();
         let mut draws = Vec::new();
         let mut losses = Vec::new();
@@ -143,7 +149,11 @@ impl Worker {
         }
 */
         if wins.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Won,
+                hash: hash(&game.borrow()),
+            }).unwrap();
             return
         } 
         while let Some(qm) = missing.pop() {
@@ -151,7 +161,11 @@ impl Worker {
             if let (_, Some(score)) = naive.find_best_move(game.clone(), player, 4, false) {
                 match score {
                     Score::Won(_) => {
-                        self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
+                        self.query.send(QueryM {
+                            worker_id: self.worker_id,
+                            score: ScoreEntry::Won,
+                            hash: hash(&game.borrow()),
+                        }).unwrap();
                         return
                     },
                     Score::Remis(_) => draws.push(qm.clone()),
@@ -160,6 +174,7 @@ impl Worker {
                 }
             }
         }
+
         unknown.iter().map(|mv|{
             match game.borrow_mut().make_move(&player, mv.clone()) {
                 Ok(_) => {
@@ -174,13 +189,26 @@ impl Worker {
                     panic!("shouldn't happen.");
                 },
             };
-        }).collect::<Vec<_>>();
+        }).for_each(drop);
+
         if unknown.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Unknown, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Unknown,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         } else if draws.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Draw,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         } else if losses.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Lost,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         }
     }
     
@@ -204,15 +232,31 @@ impl Worker {
         }
 
         if wins.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Won, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Won,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         } else if undecided.len()>0 {
             self.treat_undecided(undecided, game, &player);
         } else if draws.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Draw,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         } else if losses.len()>0 {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Lost, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Lost,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         } else {
-            self.query.send(QueryM { worker_id: self.worker_id, score: ScoreEntry::Draw, hash: hash(&game.borrow()), }).unwrap();
+            self.query.send(QueryM {
+                worker_id: self.worker_id,
+                score: ScoreEntry::Draw,
+                hash: hash(&game.borrow()),
+            }).unwrap();
         }
         DoneM { worker_id: self.worker_id }
     }
@@ -229,9 +273,15 @@ impl Worker {
         };
         let handle = thread::spawn(move || {
             while true {
-                let request:JobM = ctl_in_r.recv().unwrap();
-                let answer = self.get_it_done(request);
-                self.ctl_out.send(answer).unwrap()
+                match ctl_in_r.recv() {
+                    Ok(request) => {
+                        let answer = self.get_it_done(request);
+                        self.ctl_out.send(answer).unwrap()
+                    },
+                    Err(e) => {
+                        panic!("{}", e)
+                    }
+                }
             };
         });
         wr
@@ -269,8 +319,8 @@ impl BruteForceStrategy {
             control: Controller::new(),
             report_receiver: report_r,
         };
+
         for worker_id in 0..nworker {
-            
             bfs.workers.push(Worker::new(
                 worker_id,
                 query_s.clone(),
@@ -278,6 +328,7 @@ impl BruteForceStrategy {
                 ctl_out_s.clone()
             ).run());
         };
+
         bfs
     }
 
@@ -288,9 +339,8 @@ impl BruteForceStrategy {
 }
 
 impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
-    
     fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                     p: &Player, mv: Rc<Move<Column>>) 
+                     p: &Player, mv: Rc<Move<Column>>)
     -> Result<f32, Withdraw> {
         Ok(0.0)
     }
