@@ -52,7 +52,7 @@ use std::thread;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 struct Worker {
-    worker_id: i32,
+    worker_id: usize,
     query: Sender<QueryM>,
     record: Option<Receiver<StoreM>>,
     report: Sender<InterestingM>,
@@ -60,7 +60,7 @@ struct Worker {
 }
 
 struct WorkerRadio {
-    worker_id: i32,
+    worker_id: usize,
     record: Sender<StoreM>,
     ctl_in: Sender<JobM>,
 }
@@ -70,7 +70,7 @@ fn hash(game:&ConnectFour) -> Hash {
 }
 
 impl Worker {
-    fn new(worker_id:i32,
+    fn new(worker_id:usize,
             query:Sender<QueryM>,
             report:Sender<InterestingM>) -> Self {
         Worker {
@@ -291,7 +291,7 @@ impl Controller {
 
 // worker -> store
 struct QueryM {
-    worker_id: i32,
+    worker_id: usize,
     hash: Hash,
     score: Option<ScoreEntry>, //Some() for put, None for get
 }
@@ -304,7 +304,7 @@ struct StoreM {
 
 // worker -> control
 struct InterestingM {
-    worker_id: i32,
+    worker_id: usize,
     from: Option<Hash>, //None for initial query
     hash: Option<Hash>, //Some() for dependency, None for done
 }
@@ -315,7 +315,7 @@ struct JobM {
 }
 
 impl BruteForceStrategy {
-    pub fn new(nworker:i32) -> Self {
+    pub fn new(nworker:usize) -> Self {
         let (query_s, query_r) = channel();
         let (report_s, report_r) = channel();
 
@@ -350,16 +350,16 @@ impl BruteForceStrategy {
     pub fn pave_ground(&self,
             g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
             p: &Player,
-            toplimit: i32) {
+            toplimit: u32) {
         
-        let mut i = 0;
+        let mut i:u32 = 0;
         loop {
             match self.report_receiver.recv() {
                 Ok(interest) => {
                     println!("interest {:?} {:?}", interest.from, interest.hash);
                     match interest.hash {
                         Some(h) => {
-                            self.workers[i%self.workers.len()].ctl_in.send(JobM { 
+                            self.workers[(i%self.workers.len()as u32) as usize].ctl_in.send(JobM { 
                             hash: h }).unwrap();
                         },
                         None => {
@@ -373,14 +373,17 @@ impl BruteForceStrategy {
                 }
             }
             i+=1;
+            if i>=toplimit {
+                println!("toplimit {} reached", toplimit);
+                break;
+            }
         }
     }
 }
 
 impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
     fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                     p: &Player, mv: Rc<Move<Column>>)
-    -> Result<f32, Withdraw> {
-        Ok(0.0)
+                     p: &Player, mv: Rc<Move<Column>>) -> Result<f32,Withdraw> {
+        NaiveStrategy{}.evaluate_move(g, p, mv)
     }
 }

@@ -8,7 +8,7 @@ use std::time::{Instant};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-fn time_pondering(game:&ConnectFour, player:&Player, lookahead:i32, nworker:i32, toplimit:i32) -> u64 {
+fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usize, toplimit:u32) -> u64 {
     let strategy = BruteForceStrategy::new(nworker);
     let g = Rc::new(RefCell::new(game.clone()));
 
@@ -16,7 +16,8 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:i32, nworker:i32,
 
     strategy.pave_ground(g.clone(), player, toplimit);
 
-    match strategy.find_best_move(g.clone(), player, lookahead, true) {
+    // TODO: change lookahead to u32!
+    match strategy.find_best_move(g.clone(), player, lookahead as i32, true) {
         (Some(mv), Some(score)) => {
             println!("{:?} {:?}", mv.data(), score);
         },
