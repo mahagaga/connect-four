@@ -18,6 +18,12 @@ impl Player {
             Player::White => &Player::Black,
         }
     }
+    pub fn clone(&self) -> Player {
+        match self {
+            Player::Black => Player::Black,
+            Player::White => Player::White,
+        }
+    }
 }
 
 impl std::fmt::Display for Player {

@@ -28,9 +28,6 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:i32, nworker:i32,
     tp
 }
 
-use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread;
-
 fn main() {
     
     let nworker = 3;
