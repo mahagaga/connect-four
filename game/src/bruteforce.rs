@@ -5,10 +5,32 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 
+/* 
+ hash <-> game conversion:
+---------------------------
+the idea is to reduce the number of games in the game store
+by neutralization of stones. some stones cannot make a difference in the game (anymore)
+hence they must not be distinguished by color
+the number of possible games should be drastically decreasing through this neturalization.
+*/
+
+// for now these are only dummy implementations with no actual neutralization
+// TODO: implmentation
+fn from_hash(hash: Hash) -> ConnectFour {
+    ConnectFour::replicate(hash.hash)
+}
+
+fn to_hash(game:&ConnectFour) -> Hash {
+    Hash {
+        hash: game.display(),
+    }
+}
+
+
 pub struct BruteForceStrategy {
-    workers:Vec<WorkerRadio>,
+    workers:Vec<Sender<JobM>>,
     control:Controller,
-    query_receiver: Receiver<QueryM>,
+    //query_receiver: Receiver<QueryM>,
     report_receiver: Receiver<InterestingM>,
 }
 
@@ -59,16 +81,6 @@ struct Worker {
     ctl_in: Option<Receiver<JobM>>,
 }
 
-struct WorkerRadio {
-    worker_id: usize,
-    record: Sender<StoreM>,
-    ctl_in: Sender<JobM>,
-}
-
-fn hash(game:&ConnectFour) -> Hash {
-    Hash{hash:String::from(""),}
-}
-
 impl Worker {
     fn new(worker_id:usize,
             query:Sender<QueryM>,
@@ -83,7 +95,7 @@ impl Worker {
     }
 
     fn parse_request(request:JobM) -> (ConnectFour,Player) {
-        (ConnectFour::new(), Player::White)
+        (from_hash(request.hash), Player::White)
     }
 
     fn get_entry(&self, hash:Hash) -> ScoreEntry {
@@ -105,7 +117,7 @@ impl Worker {
 
         for mv in undecided.iter() {
             game.borrow_mut().make_move(player, mv.clone()).unwrap();
-            match self.get_entry(hash(&game.borrow())) {
+            match self.get_entry(to_hash(&game.borrow())) {
                 ScoreEntry::Won => wins.push(mv.clone()),
                 ScoreEntry::Lost => losses.push(mv.clone()),
                 ScoreEntry::Draw => draws.push(mv.clone()),
@@ -133,7 +145,7 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Won),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
             return
         } 
@@ -145,7 +157,7 @@ impl Worker {
                         self.query.send(QueryM {
                             worker_id: self.worker_id,
                             score: Some(ScoreEntry::Won),
-                            hash: hash(&game.borrow()),
+                            hash: to_hash(&game.borrow()),
                         }).unwrap();
                         return
                     },
@@ -156,7 +168,7 @@ impl Worker {
             }
         }
 
-        let job_hash = hash(&game.borrow());
+        let job_hash = to_hash(&game.borrow());
         unknown.iter().map(|mv|{
             let score = game.borrow_mut().make_move(&player, mv.clone());
             match score {
@@ -165,7 +177,7 @@ impl Worker {
                         InterestingM {
                             worker_id: self.worker_id,
                             from: Some(job_hash.clone()),
-                            hash: Some(hash(&game.borrow())),
+                            hash: Some(to_hash(&game.borrow())),
                     }).unwrap();
                     game.borrow_mut().withdraw_move(&player, mv.clone());
                 },
@@ -179,19 +191,19 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Unknown),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         } else if draws.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         } else if losses.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Lost),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         }
     }
@@ -221,7 +233,7 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Won),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         } else if undecided.len()>0 {
             self.treat_undecided(undecided, game, &player);
@@ -229,19 +241,19 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         } else if losses.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Lost),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         } else {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: hash(&game.borrow()),
+                hash: to_hash(&game.borrow()),
             }).unwrap();
         }
 
@@ -252,16 +264,15 @@ impl Worker {
         }).unwrap();
     }
 
-    fn run(mut self) -> WorkerRadio {
+    fn run(mut self) -> (Sender<JobM>, Sender<StoreM>) {
         let (record_s, record_r) = channel();
         self.record = Some(record_r);
         let (ctl_in_s, ctl_in_r) = channel();
         //self.ctl_in = Some(ctl_in_r);
-        let wr = WorkerRadio {
-            worker_id: self.worker_id,
-            ctl_in:ctl_in_s.clone(),
-            record:record_s.clone(),
-        };
+        let wr = (
+            ctl_in_s.clone(),
+            record_s.clone(),
+        );
         
         thread::spawn(move || {
             loop {
@@ -321,36 +332,44 @@ impl BruteForceStrategy {
 
         let mut bfs = BruteForceStrategy { 
             workers: Vec::new(),
-            query_receiver: query_r,
             control: Controller::new(),
             report_receiver: report_r,
         };
 
-        report_s.send(InterestingM{
-            worker_id: 0,
-            from: None,
-            hash: Some(Hash{
-                hash: String::from("start"),
-            }),
-        }).unwrap();
-
+        let mut records = Vec::new();
         for worker_id in 0..nworker {
-            bfs.workers.push(Worker::new(
+            let (job_sender, store_sender) = Worker::new(
                 worker_id,
                 query_s.clone(),
                 report_s.clone()
-            ).run());
+            ).run();
+            bfs.workers.push(job_sender);
+            records.push(store_sender);
         };
+
+        thread::spawn(move || {
+            loop {
+                let query = query_r.recv().unwrap();
+                records[0].send(StoreM{
+                    hash: Hash{ hash: String::from(""), }, 
+                    score: ScoreEntry::Missing, 
+                }).unwrap();
+            }
+        });
 
         bfs
     }
-    fn from_hash(&self, hash: Hash) -> ConnectFour {
-        ConnectFour::new()
-    }
+    
     pub fn pave_ground(&self,
             g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
             p: &Player,
             toplimit: u32) {
+        
+        self.workers[0].send(JobM {
+            hash: Hash {
+                hash: g.borrow().display(),
+            },
+        }).unwrap();
         
         let mut i:u32 = 0;
         loop {
@@ -359,7 +378,7 @@ impl BruteForceStrategy {
                     println!("interest {:?} {:?}", interest.from, interest.hash);
                     match interest.hash {
                         Some(h) => {
-                            self.workers[(i%self.workers.len()as u32) as usize].ctl_in.send(JobM { 
+                            self.workers[(i%self.workers.len()as u32) as usize].send(JobM { 
                             hash: h }).unwrap();
                         },
                         None => {

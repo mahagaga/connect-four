@@ -1,6 +1,6 @@
 extern crate game;
 use game::bruteforce::BruteForceStrategy;
-use game::connectfour::{ConnectFour, Column};
+use game::connectfour::ConnectFour;
 use game::generic::{Player,Strategy};
 
 
@@ -35,7 +35,7 @@ fn main() {
     let lookahead = 4;
     let toplimit = 8;
     let player = Player::White;
-    let games = [ConnectFour::new(), replicate_game("------
+    let games = [ConnectFour::new(), ConnectFour::replicate(String::from("------
 
 
 
@@ -43,7 +43,7 @@ fn main() {
 
 
 
-------"), replicate_game("------
+------")), ConnectFour::replicate(String::from("------
 
 x
 
@@ -51,7 +51,7 @@ xo
 
 
 
-------"), ];
+------")), ];
     let _timep = games.iter()
     .map(|game| {
         time_pondering(game, &player, lookahead, nworker, toplimit)
@@ -61,26 +61,4 @@ xo
         tp
     })
     .collect::<Vec<_>>();
-}
-
-fn replicate_game(plan: &str) -> ConnectFour {
-    let mut g = ConnectFour::new();
-    for (i, line) in plan.split("\n").enumerate() {
-        match i {
-            b if (b > 0 && b < 8) => {
-                for c in line.chars() {
-                    g.drop_stone(
-                        match c {
-                            'x' => &Player::Black,
-                            'o' => &Player::White,
-                            what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
-                        },
-                        Column::from_usize(i-1)
-                    ).unwrap(); 
-                }
-            },
-            _ => assert_eq!(line, "------"),
-        }
-    }
-    g
 }

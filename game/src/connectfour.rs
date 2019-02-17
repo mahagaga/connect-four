@@ -112,6 +112,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         s.push_str("------");
         s
     }
+
     fn state(&self) -> &Vec<Vec<Option<Player>>> {
         &self.field
     }
@@ -258,6 +259,28 @@ impl ConnectFour {
             }
         }
         false
+    }
+
+    pub fn replicate(plan: String) -> ConnectFour {
+        let mut g = ConnectFour::new();
+        for (i, line) in plan.split("\n").enumerate() {
+            match i {
+                b if (b > 0 && b < 8) => {
+                    for c in line.chars() {
+                        g.drop_stone(
+                            match c {
+                                'x' => &Player::Black,
+                                'o' => &Player::White,
+                                what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
+                            },
+                            Column::from_usize(i-1)
+                        ).unwrap(); 
+                    }
+                },
+                _ => assert_eq!(line, "------"),
+            }
+        }
+        g
     }
 }
 
