@@ -1,5 +1,5 @@
 extern crate game;
-use game::bruteforce::BruteForceStrategy;
+use game::bruteforce::{BruteForceStrategy, STOP};
 use game::connectfour::ConnectFour;
 use game::generic::{Player,Strategy};
 
@@ -15,7 +15,6 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
     let then = Instant::now();
 
     strategy.pave_ground(g.clone(), player, toplimit);
-
     // TODO: change lookahead to u32!
     match strategy.find_best_move(g.clone(), player, lookahead as i32, true) {
         (Some(mv), Some(score)) => {
@@ -23,7 +22,10 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
         },
         _ => (),
     }
-
+    strategy.stopper.send(STOP()).unwrap();
+    let store = strategy.store_handle.unwrap().join().unwrap();
+    println!("store size {}", store.scores.keys().len());
+    
     let now = Instant::now();
     let tp = now.duration_since(then).as_secs();
     tp
@@ -33,7 +35,7 @@ fn main() {
     
     let nworker = 3;
     let lookahead = 4;
-    let toplimit = 8;
+    let toplimit = 512;
     let player = Player::White;
     let games = [ConnectFour::new(), ConnectFour::replicate(String::from("------
 

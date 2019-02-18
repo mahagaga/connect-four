@@ -16,22 +16,15 @@ the number of possible games should be drastically decreasing through this netur
 
 // for now these are only dummy implementations with no actual neutralization
 // TODO: implmentation
-fn from_hash(hash: Hash) -> ConnectFour {
-    ConnectFour::replicate(hash.hash)
+fn from_hash(hash: Hash) -> (ConnectFour, Player) {
+    (ConnectFour::replicate(hash.hash), hash.player)
 }
 
-fn to_hash(game:&ConnectFour) -> Hash {
+fn to_hash(game:&ConnectFour, player:&Player) -> Hash {
     Hash {
         hash: game.display(),
+        player: player.clone()
     }
-}
-
-
-pub struct BruteForceStrategy {
-    workers:Vec<Sender<JobM>>,
-    //control:Controller,
-    //query_receiver: Receiver<QueryM>,
-    report_receiver: Receiver<InterestingM>,
 }
 
 /*enum Eval {
@@ -40,19 +33,18 @@ pub struct BruteForceStrategy {
 }*/
 
 use std::collections::HashMap;
-struct Store {
-    games:HashMap<String,ConnectFour>,
-    scores:HashMap<String,ScoreEntry>,
-    calrec:HashMap<String,String>,
+pub struct Store {
+    pub scores: HashMap<String,ScoreEntry>,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,PartialEq)]
 struct Hash {
     hash: String,
+    player: Player,
 }
 
 #[derive(Clone,Debug)]
-enum ScoreEntry {
+pub enum ScoreEntry {
     Won,
     Lost,
     Draw,
@@ -64,9 +56,7 @@ enum ScoreEntry {
 impl Store {
     fn new() -> Self {
         Store {
-            games: HashMap::new(),
             scores: HashMap::new(),
-            calrec: HashMap::new(),
         }
     }
 }
@@ -79,7 +69,6 @@ struct Worker {
     query: Sender<QueryM>,
     record: Option<Receiver<StoreM>>,
     report: Sender<InterestingM>,
-    ctl_in: Option<Receiver<JobM>>,
 }
 
 impl Worker {
@@ -91,12 +80,11 @@ impl Worker {
             query:query,
             record:None,
             report:report,
-            ctl_in:None,
         }
     }
 
     fn parse_request(request:JobM) -> (ConnectFour,Player) {
-        (from_hash(request.hash), Player::White)
+        from_hash(request.hash)
     }
 
     fn get_entry(&self, hash:Hash) -> ScoreEntry {
@@ -104,12 +92,16 @@ impl Worker {
             worker_id: self.worker_id,
             hash: hash,
             score: None,
+            stop: false,
         };
         loop {
             if let Ok(_) = self.query.send(q.clone()) {
                 match self.record {
                     Some(ref receiver) => {
                         if let Ok(score) = receiver.recv() {
+                            if q.hash != score.hash {
+                                panic!("that is not the answer to this question!")
+                            }
                             return score.score;
                         } else {
                             println!("score receiver doesn't work (worker {})", self.worker_id)
@@ -122,12 +114,11 @@ impl Worker {
             }
             thread::sleep(std::time::Duration::new(5,0));
         }
-        ScoreEntry::Missing
     }
 
     fn treat_undecided(&self,
             undecided: Vec<std::rc::Rc<dyn Move<Column>>>,
-            mut game: Rc<RefCell<ConnectFour>>,
+            game: Rc<RefCell<ConnectFour>>,
             player:&Player) {
         let mut wins = Vec::new();
         let mut draws = Vec::new();
@@ -140,7 +131,7 @@ impl Worker {
 
         for mv in undecided.iter() {
             game.borrow_mut().make_move(player, mv.clone()).unwrap();
-            match self.get_entry(to_hash(&game.borrow())) {
+            match self.get_entry(to_hash(&game.borrow(), player)) {
                 ScoreEntry::Won => wins.push(mv.clone()),
                 ScoreEntry::Lost => losses.push(mv.clone()),
                 ScoreEntry::Draw => draws.push(mv.clone()),
@@ -168,7 +159,8 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Won),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), player),
+                stop: false,
             }).unwrap();
             return
         } 
@@ -180,7 +172,8 @@ impl Worker {
                         self.query.send(QueryM {
                             worker_id: self.worker_id,
                             score: Some(ScoreEntry::Won),
-                            hash: to_hash(&game.borrow()),
+                            hash: to_hash(&game.borrow(), player),
+                            stop: false,
                         }).unwrap();
                         return
                     },
@@ -191,7 +184,7 @@ impl Worker {
             }
         }
 
-        let job_hash = to_hash(&game.borrow());
+        let job_hash = to_hash(&game.borrow(), player);
         unknown.iter().map(|mv|{
             let score = game.borrow_mut().make_move(&player, mv.clone());
             match score {
@@ -200,9 +193,9 @@ impl Worker {
                         InterestingM {
                             worker_id: self.worker_id,
                             from: Some(job_hash.clone()),
-                            hash: Some(to_hash(&game.borrow())),
+                            hash: Some(to_hash(&game.borrow(), player)),
                     }) {
-                        println!("something happened during report {}", self.worker_id);
+                        println!("something happened during report of worker {}: {}", self.worker_id, e);
                         thread::sleep(std::time::Duration::new(5,0));
                     }
                     game.borrow_mut().withdraw_move(&player, mv.clone());
@@ -217,19 +210,22 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Unknown),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), player),
+                stop: false,
             }).unwrap();
         } else if draws.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), player),
+                stop: false,
             }).unwrap();
         } else if losses.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Lost),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), player),
+                stop: false,
             }).unwrap();
         }
     }
@@ -259,7 +255,8 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Won),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), &player),
+                stop: false,
             }).unwrap();
         } else if undecided.len()>0 {
             self.treat_undecided(undecided, game, &player);
@@ -267,19 +264,22 @@ impl Worker {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), &player),
+                stop: false,
             }).unwrap();
         } else if losses.len()>0 {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Lost),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), &player),
+                stop: false,
             }).unwrap();
         } else {
             self.query.send(QueryM {
                 worker_id: self.worker_id,
                 score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow()),
+                hash: to_hash(&game.borrow(), &player),
+                stop: false,
             }).unwrap();
         }
 
@@ -316,22 +316,23 @@ impl Worker {
         wr
     }
 }
-struct Controller {
-    store: Store,
-}
-
-impl Controller {
-    fn new() -> Self {
-        Controller { store: Store::new(), }
-    }
-}
 
 // worker -> store
 #[derive(Clone, Debug)]
-struct QueryM {
+pub struct QueryM {
     worker_id: usize,
     hash: Hash,
     score: Option<ScoreEntry>, //Some() for put, None for get
+    stop: bool,
+}
+
+#[allow(non_snake_case)]
+pub fn STOP() ->QueryM {
+    QueryM {
+        worker_id: 0,
+        hash: Hash{hash:String::from(""), player:Player::White},
+        score: None, stop: true
+    }
 }
 
 // store -> worker
@@ -352,6 +353,13 @@ struct JobM {
     hash: Hash,
 }
 
+pub struct BruteForceStrategy {
+    workers: Vec<Sender<JobM>>,
+    report_receiver: Receiver<InterestingM>,
+    pub store_handle: Option<std::thread::JoinHandle<Store>>,
+    pub stopper: Sender<QueryM>,
+}
+
 impl BruteForceStrategy {
     pub fn new(nworker:usize) -> Self {
         let (query_s, query_r) = channel();
@@ -359,8 +367,9 @@ impl BruteForceStrategy {
 
         let mut bfs = BruteForceStrategy { 
             workers: Vec::new(),
-            //control: Controller::new(),
             report_receiver: report_r,
+            store_handle: None,
+            stopper: query_s.clone(),
         };
 
         let mut records = Vec::new();
@@ -374,11 +383,12 @@ impl BruteForceStrategy {
             records.push(store_sender);
         };
 
-        thread::spawn(move || {
+        bfs.store_handle = Some(thread::spawn(move || {
             let mut store = Store::new();
             loop {
                 match query_r.recv(){
                     Ok(query) => {
+                        if query.stop { break; }
                         println!("query {:?}", query);
                         match query.score {
                             // lookup scores table and send value back - or 'Missing'
@@ -406,7 +416,8 @@ impl BruteForceStrategy {
                     },
                 }
             }
-        });
+            store
+        }));
 
         bfs
     }
@@ -419,6 +430,7 @@ impl BruteForceStrategy {
         self.workers[0].send(JobM {
             hash: Hash {
                 hash: g.borrow().display(),
+                player: p.clone(),
             },
         }).unwrap();
         
