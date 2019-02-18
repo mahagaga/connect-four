@@ -29,28 +29,29 @@ fn to_hash(game:&ConnectFour) -> Hash {
 
 pub struct BruteForceStrategy {
     workers:Vec<Sender<JobM>>,
-    control:Controller,
+    //control:Controller,
     //query_receiver: Receiver<QueryM>,
     report_receiver: Receiver<InterestingM>,
 }
 
-enum Eval {
+/*enum Eval {
     Available(Score),
     InCalculation,
-}
+}*/
 
 use std::collections::HashMap;
 struct Store {
     games:HashMap<String,ConnectFour>,
-    scores:HashMap<String,Eval>,
+    scores:HashMap<String,ScoreEntry>,
     calrec:HashMap<String,String>,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Clone,Debug)]
 struct Hash {
     hash: String,
 }
 
+#[derive(Clone,Debug)]
 enum ScoreEntry {
     Won,
     Lost,
@@ -99,7 +100,29 @@ impl Worker {
     }
 
     fn get_entry(&self, hash:Hash) -> ScoreEntry {
-        ScoreEntry::Unknown
+        let q = QueryM {
+            worker_id: self.worker_id,
+            hash: hash,
+            score: None,
+        };
+        loop {
+            if let Ok(_) = self.query.send(q.clone()) {
+                match self.record {
+                    Some(ref receiver) => {
+                        if let Ok(score) = receiver.recv() {
+                            return score.score;
+                        } else {
+                            println!("score receiver doesn't work (worker {})", self.worker_id)
+                        }
+                    },
+                    None => panic!("worker {} without receiver", self.worker_id),
+                };
+            } else {
+                println!("query sender doesn't work (worker {})", self.worker_id)
+            }
+            thread::sleep(std::time::Duration::new(5,0));
+        }
+        ScoreEntry::Missing
     }
 
     fn treat_undecided(&self,
@@ -173,12 +196,15 @@ impl Worker {
             let score = game.borrow_mut().make_move(&player, mv.clone());
             match score {
                 Ok(_) => {
-                    self.report.send(
+                    if let Err(e) = self.report.send(
                         InterestingM {
                             worker_id: self.worker_id,
                             from: Some(job_hash.clone()),
                             hash: Some(to_hash(&game.borrow())),
-                    }).unwrap();
+                    }) {
+                        println!("something happened during report {}", self.worker_id);
+                        thread::sleep(std::time::Duration::new(5,0));
+                    }
                     game.borrow_mut().withdraw_move(&player, mv.clone());
                 },
                 Err(_) => {
@@ -281,7 +307,7 @@ impl Worker {
                         self.get_it_done(request);
                     },
                     Err(e) => {
-                        println!("worker {} not receiving: {}", self.worker_id, e);
+                        println!("worker {} receiver failed: {}", self.worker_id, e);
                         thread::sleep(std::time::Duration::new(5,0));
                     },
                 }
@@ -301,6 +327,7 @@ impl Controller {
 }
 
 // worker -> store
+#[derive(Clone, Debug)]
 struct QueryM {
     worker_id: usize,
     hash: Hash,
@@ -332,7 +359,7 @@ impl BruteForceStrategy {
 
         let mut bfs = BruteForceStrategy { 
             workers: Vec::new(),
-            control: Controller::new(),
+            //control: Controller::new(),
             report_receiver: report_r,
         };
 
@@ -348,12 +375,36 @@ impl BruteForceStrategy {
         };
 
         thread::spawn(move || {
+            let mut store = Store::new();
             loop {
-                let query = query_r.recv().unwrap();
-                records[0].send(StoreM{
-                    hash: Hash{ hash: String::from(""), }, 
-                    score: ScoreEntry::Missing, 
-                }).unwrap();
+                match query_r.recv(){
+                    Ok(query) => {
+                        println!("query {:?}", query);
+                        match query.score {
+                            // lookup scores table and send value back - or 'Missing'
+                            None => {
+                                records[query.worker_id].send(StoreM{
+                                    hash: query.hash.clone(), 
+                                    score: match store.scores.get(&query.hash.hash) {
+                                        None => ScoreEntry::Missing,
+                                        Some(score_entry) => (*score_entry).clone(),
+                                    }, 
+                                }).unwrap();
+                            },
+                            // update scores table
+                            Some(newscore) => {
+                                store.scores.insert(
+                                    query.hash.hash,
+                                    newscore
+                                );
+                            },
+                        };
+                    },
+                    Err(e) => {
+                        println!("store receiver failed: {}", e);
+                        thread::sleep(std::time::Duration::new(5,0));
+                    },
+                }
             }
         });
 
@@ -387,7 +438,7 @@ impl BruteForceStrategy {
                     }
                 },
                 Err(e) => {
-                    println!("query receiver failed {}", e);
+                    println!("report receiver failed {}", e);
                     thread::sleep(std::time::Duration::new(5,0));
                 }
             }
