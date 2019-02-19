@@ -62,6 +62,7 @@ impl Store {
 }
 
 use std::thread;
+use std::thread::JoinHandle;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 struct Worker {
@@ -83,8 +84,8 @@ impl Worker {
         }
     }
 
-    fn parse_request(request:JobM) -> (ConnectFour,Player) {
-        from_hash(request.hash)
+    fn parse_request(request:Hash) -> (ConnectFour,Player) {
+        from_hash(request)
     }
 
     fn get_entry(&self, hash:Hash) -> ScoreEntry {
@@ -230,9 +231,9 @@ impl Worker {
         }
     }
     
-    fn get_it_done(&self, request:JobM) {
-        let hash_clone = request.hash.clone();
-        let (game, player) = Worker::parse_request(request);
+    fn get_it_done(&self, hash:Hash) {
+        let hash_clone = hash.clone();
+        let (game, player) = Worker::parse_request(hash);
         let game = Rc::new(RefCell::new(game));
         let mut wins = Vec::new();
         let mut draws = Vec::new();
@@ -290,21 +291,21 @@ impl Worker {
         }).unwrap();
     }
 
-    fn run(mut self) -> (Sender<JobM>, Sender<StoreM>) {
+    fn run(mut self) -> (Sender<JobM>, JoinHandle<()>, Sender<StoreM>) {
         let (record_s, record_r) = channel();
         self.record = Some(record_r);
-        let (ctl_in_s, ctl_in_r) = channel();
+        let (ctl_in_s, ctl_in_r):(Sender<JobM>,Receiver<JobM>) = channel();
         //self.ctl_in = Some(ctl_in_r);
-        let wr = (
-            ctl_in_s.clone(),
-            record_s.clone(),
-        );
+        let job_sender = ctl_in_s.clone();
+        let store_sender = record_s.clone();
         
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             loop {
                 match ctl_in_r.recv() {
                     Ok(request) => {
-                        self.get_it_done(request);
+                        if request.day_call { break; } else {
+                            self.get_it_done(request.hash);
+                        }
                     },
                     Err(e) => {
                         println!("worker {} receiver failed: {}", self.worker_id, e);
@@ -313,7 +314,7 @@ impl Worker {
                 }
             };
         });
-        wr
+        (job_sender, handle, store_sender)
     }
 }
 
@@ -351,13 +352,15 @@ struct InterestingM {
 // control -> worker
 struct JobM {
     hash: Hash,
+    day_call:bool, // for sending the worker home
 }
 
 pub struct BruteForceStrategy {
     workers: Vec<Sender<JobM>>,
+    work_handles: Vec<JoinHandle<()>>,
     report_receiver: Receiver<InterestingM>,
-    pub store_handle: Option<std::thread::JoinHandle<Store>>,
-    pub stopper: Sender<QueryM>,
+    store_handle: Option<std::thread::JoinHandle<Store>>,
+    stopper: Sender<QueryM>,
 }
 
 impl BruteForceStrategy {
@@ -367,6 +370,7 @@ impl BruteForceStrategy {
 
         let mut bfs = BruteForceStrategy { 
             workers: Vec::new(),
+            work_handles: Vec::new(),
             report_receiver: report_r,
             store_handle: None,
             stopper: query_s.clone(),
@@ -374,12 +378,13 @@ impl BruteForceStrategy {
 
         let mut records = Vec::new();
         for worker_id in 0..nworker {
-            let (job_sender, store_sender) = Worker::new(
+            let (job_sender, join_handle, store_sender) = Worker::new(
                 worker_id,
                 query_s.clone(),
                 report_s.clone()
             ).run();
             bfs.workers.push(job_sender);
+            bfs.work_handles.push(join_handle);
             records.push(store_sender);
         };
 
@@ -432,6 +437,7 @@ impl BruteForceStrategy {
                 hash: g.borrow().display(),
                 player: p.clone(),
             },
+            day_call: false,
         }).unwrap();
         
         let mut i:u32 = 0;
@@ -442,7 +448,7 @@ impl BruteForceStrategy {
                     match interest.hash {
                         Some(h) => {
                             self.workers[(i%self.workers.len()as u32) as usize].send(JobM { 
-                            hash: h }).unwrap();
+                            hash: h, day_call: false }).unwrap();
                         },
                         None => {
                             println!("{} done", interest.worker_id);
@@ -460,6 +466,23 @@ impl BruteForceStrategy {
                 break;
             }
         }
+    }
+
+    pub fn collect_store(mut self) -> Store {
+        self.workers.iter().for_each(|w| {
+            w.send(JobM{
+                hash:Hash{hash:String::from(""),player:Player::White},
+                day_call:true
+            }).unwrap();
+        });
+        loop {
+            match self.work_handles.pop() {
+                None => { break; },
+                Some(wh) => wh.join().unwrap(),
+            }
+        }
+        self.stopper.send(STOP()).unwrap();
+        self.store_handle.unwrap().join().unwrap()
     }
 }
 

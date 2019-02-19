@@ -1,5 +1,5 @@
 extern crate game;
-use game::bruteforce::{BruteForceStrategy, STOP};
+use game::bruteforce::BruteForceStrategy;
 use game::connectfour::ConnectFour;
 use game::generic::{Player,Strategy};
 
@@ -22,8 +22,7 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
         },
         _ => (),
     }
-    strategy.stopper.send(STOP()).unwrap();
-    let store = strategy.store_handle.unwrap().join().unwrap();
+    let store = strategy.collect_store();
     println!("store size {}", store.scores.keys().len());
     
     let now = Instant::now();
@@ -35,7 +34,7 @@ fn main() {
     
     let nworker = 3;
     let lookahead = 4;
-    let toplimit = 512;
+    let toplimit = 16;
     let player = Player::White;
     let games = [ConnectFour::new(), ConnectFour::replicate(String::from("------
 
