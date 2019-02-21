@@ -15,13 +15,7 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
     let then = Instant::now();
 
     strategy.pave_ground(g.clone(), player, toplimit);
-    // TODO: change lookahead to u32!
-    match strategy.find_best_move(g.clone(), player, lookahead as i32, true) {
-        (Some(mv), Some(score)) => {
-            println!("{:?} {:?}", mv.data(), score);
-        },
-        _ => (),
-    }
+    
     let store = strategy.collect_store();
     println!("store size {}", store.scores.keys().len());
     
@@ -36,23 +30,15 @@ fn main() {
     let lookahead = 4;
     let toplimit = 16;
     let player = Player::White;
-    let games = [ConnectFour::new(), ConnectFour::replicate(String::from("------
+    let games = [ConnectFour::replicate(String::from("------
 
 
 
+ox
 
 
 
-
-------")), ConnectFour::replicate(String::from("------
-
-x
-
-xo
-
-
-
-------")), ];
+------")),];
     let _timep = games.iter()
     .map(|game| {
         time_pondering(game, &player, lookahead, nworker, toplimit)

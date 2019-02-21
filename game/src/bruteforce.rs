@@ -164,7 +164,7 @@ impl Worker {
                 stop: false,
             }).unwrap();
             return
-        } 
+        }
         while let Some(qm) = missing.pop() {
             let naive = NaiveStrategy {};
             if let (_, Some(score)) = naive.find_best_move(game.clone(), player, 4, false) {
@@ -190,14 +190,46 @@ impl Worker {
             let score = game.borrow_mut().make_move(&player, mv.clone());
             match score {
                 Ok(_) => {
-                    if let Err(e) = self.report.send(
-                        InterestingM {
-                            worker_id: self.worker_id,
-                            from: Some(job_hash.clone()),
-                            hash: Some(to_hash(&game.borrow(), player)),
-                    }) {
-                        println!("something happened during report of worker {}: {}", self.worker_id, e);
-                        thread::sleep(std::time::Duration::new(5,0));
+                    let mut interests:Vec<InterestingM> = Vec::new();
+                    let mut lost = false;
+                    let opoptions = game.borrow().possible_moves(player.opponent());
+                    for opmv in opoptions {
+                        let opscore = game.borrow_mut().make_move(player.opponent(), opmv.clone());
+                        match opscore {
+                            Ok(Score::Won(_)) => {
+                                game.borrow_mut().withdraw_move(player.opponent(), opmv.clone());
+                                self.query.send(QueryM {
+                                    worker_id: self.worker_id,
+                                    score: Some(ScoreEntry::Lost),
+                                    hash: to_hash(&game.borrow(), player),
+                                    stop: false,
+                                }).unwrap();
+                                lost = true;
+                                break;
+                            },
+                            Ok(Score::Undecided(_)) => {
+                               interests.push(
+                                    InterestingM {
+                                        worker_id: self.worker_id,
+                                        from: Some(job_hash.clone()),
+                                        hash: Some(to_hash(&game.borrow(), player)),
+                                });
+                                game.borrow_mut().withdraw_move(player.opponent(), opmv);
+                            },
+                            Ok(_) => {
+                                game.borrow_mut().withdraw_move(player.opponent(), opmv);
+                            }
+                            Err(_) => panic!("shouldn't happen."),
+                        }
+                    }
+                    if !lost {
+                        for interest in interests {
+                            if let Err(e) = self.report.send(interest) {
+                                println!("something happened during report of worker {}: {}", self.worker_id, e);
+                                panic!();
+                                thread::sleep(std::time::Duration::new(5,0));
+                            }
+                        }
                     }
                     game.borrow_mut().withdraw_move(&player, mv.clone());
                 },
