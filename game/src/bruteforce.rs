@@ -120,69 +120,67 @@ impl Worker {
     fn treat_undecided(&self,
             undecided: Vec<std::rc::Rc<dyn Move<Column>>>,
             game: Rc<RefCell<ConnectFour>>,
-            player:&Player) {
-        let mut wins = Vec::new();
-        let mut draws = Vec::new();
-        let mut losses = Vec::new();
+            player:&Player,
+            lookahead:u32) {
         let mut unknown = Vec::new();
         let mut missing = Vec::new();
-/* The state InCalculation doesn't make sense in a strictly unsynchronized aproach
-   one cannot know when the record is changed... */
-//        let mut incalculation = Vec::new();
 
         for mv in undecided.iter() {
             game.borrow_mut().make_move(player, mv.clone()).unwrap();
             match self.get_entry(to_hash(&game.borrow(), player)) {
-                ScoreEntry::Won => wins.push(mv.clone()),
-                ScoreEntry::Lost => losses.push(mv.clone()),
-                ScoreEntry::Draw => draws.push(mv.clone()),
-//                ScoreEntry::InCalculation => incalculation.push(mv.clone()),
+                ScoreEntry::Won => return,
+                ScoreEntry::Lost => (),
+                ScoreEntry::Draw => (),
                 ScoreEntry::Unknown => unknown.push(mv.clone()),
                 ScoreEntry::Missing => missing.push(mv.clone()),
             }
             game.borrow_mut().withdraw_move(&player, mv.clone());
         }
 
-/*        while let Some(mv) = incalculation.pop() {
-            game.borrow_mut().make_move(player, mv.clone()).unwrap();
-            match self.get_entry(hash(&game.borrow())) {
-                ScoreEntry::Won => wins.push(mv.clone()),
-                ScoreEntry::Lost => losses.push(mv.clone()),
-                ScoreEntry::Draw => draws.push(mv.clone()),
-                ScoreEntry::InCalculation => incalculation.insert(0, mv.clone()),
-                ScoreEntry::Unknown => unknown.push(mv.clone()),
-                ScoreEntry::Missing => missing.push(mv.clone()),
-            }
-            game.borrow_mut().withdraw_move(&player, mv.clone());
-        }
-*/
-        if wins.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Won),
-                hash: to_hash(&game.borrow(), player),
-                stop: false,
-            }).unwrap();
-            return
-        }
         while let Some(qm) = missing.pop() {
+            game.borrow_mut().make_move(&player, qm.clone()).unwrap();
             let naive = NaiveStrategy {};
-            if let (_, Some(score)) = naive.find_best_move(game.clone(), player, 4, false) {
+            if let (Some(_), Some(score)) = naive.find_best_move(game.clone(), player.opponent(), lookahead as i32, false) {
                 match score {
-                    Score::Won(_) => {
-                        self.query.send(QueryM {
+                    Score::Lost(_) => {
+                        let winm = QueryM {
                             worker_id: self.worker_id,
                             score: Some(ScoreEntry::Won),
                             hash: to_hash(&game.borrow(), player),
                             stop: false,
-                        }).unwrap();
+                        };
+                        game.borrow_mut().withdraw_move(&player, qm.clone());
+                        self.query.send(winm).unwrap();
                         return
                     },
-                    Score::Remis(_) => draws.push(qm.clone()),
-                    Score::Lost(_) => losses.push(qm.clone()),
-                    Score::Undecided(_) => unknown.push(qm.clone()),
+                    Score::Remis(_) => {
+                        self.query.send(QueryM {
+                            worker_id: self.worker_id,
+                            score: Some(ScoreEntry::Draw),
+                            hash: to_hash(&game.borrow(), player),
+                            stop: false,
+                        }).unwrap();
+                    },
+                    Score::Won(_) => {
+                        self.query.send(QueryM {
+                            worker_id: self.worker_id,
+                            score: Some(ScoreEntry::Lost),
+                            hash: to_hash(&game.borrow(), player),
+                            stop: false,
+                        }).unwrap();
+                    },
+                    Score::Undecided(_) => {
+                        self.query.send(QueryM {
+                            worker_id: self.worker_id,
+                            score: Some(ScoreEntry::Unknown),
+                            hash: to_hash(&game.borrow(), player),
+                            stop: false,
+                        }).unwrap();
+                        unknown.push(qm.clone())
+                    },
                 }
             }
+            game.borrow_mut().withdraw_move(&player, qm.clone());
         }
 
         let job_hash = to_hash(&game.borrow(), player);
@@ -226,8 +224,8 @@ impl Worker {
                         for interest in interests {
                             if let Err(e) = self.report.send(interest) {
                                 println!("something happened during report of worker {}: {}", self.worker_id, e);
+                                //thread::sleep(std::time::Duration::new(5,0));
                                 panic!();
-                                thread::sleep(std::time::Duration::new(5,0));
                             }
                         }
                     }
@@ -238,32 +236,9 @@ impl Worker {
                 },
             };
         }).for_each(drop);
-
-        if unknown.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Unknown),
-                hash: to_hash(&game.borrow(), player),
-                stop: false,
-            }).unwrap();
-        } else if draws.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow(), player),
-                stop: false,
-            }).unwrap();
-        } else if losses.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Lost),
-                hash: to_hash(&game.borrow(), player),
-                stop: false,
-            }).unwrap();
-        }
     }
     
-    fn get_it_done(&self, hash:Hash) {
+    fn get_it_done(&self, hash:Hash, lookahead:u32) {
         let hash_clone = hash.clone();
         let (game, player) = Worker::parse_request(hash);
         let game = Rc::new(RefCell::new(game));
@@ -285,35 +260,9 @@ impl Worker {
         }
 
         if wins.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Won),
-                hash: to_hash(&game.borrow(), &player),
-                stop: false,
-            }).unwrap();
+            return
         } else if undecided.len()>0 {
-            self.treat_undecided(undecided, game, &player);
-        } else if draws.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow(), &player),
-                stop: false,
-            }).unwrap();
-        } else if losses.len()>0 {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Lost),
-                hash: to_hash(&game.borrow(), &player),
-                stop: false,
-            }).unwrap();
-        } else {
-            self.query.send(QueryM {
-                worker_id: self.worker_id,
-                score: Some(ScoreEntry::Draw),
-                hash: to_hash(&game.borrow(), &player),
-                stop: false,
-            }).unwrap();
+            self.treat_undecided(undecided, game, &player, lookahead);
         }
 
         self.report.send(InterestingM {
@@ -323,7 +272,7 @@ impl Worker {
         }).unwrap();
     }
 
-    fn run(mut self) -> (Sender<JobM>, JoinHandle<()>, Sender<StoreM>) {
+    fn run(mut self, lookahead:u32) -> (Sender<JobM>, JoinHandle<()>, Sender<StoreM>) {
         let (record_s, record_r) = channel();
         self.record = Some(record_r);
         let (ctl_in_s, ctl_in_r):(Sender<JobM>,Receiver<JobM>) = channel();
@@ -336,7 +285,7 @@ impl Worker {
                 match ctl_in_r.recv() {
                     Ok(request) => {
                         if request.day_call { break; } else {
-                            self.get_it_done(request.hash);
+                            self.get_it_done(request.hash, lookahead);
                         }
                     },
                     Err(e) => {
@@ -396,7 +345,8 @@ pub struct BruteForceStrategy {
 }
 
 impl BruteForceStrategy {
-    pub fn new(nworker:usize) -> Self {
+    pub fn new(nworker:usize,
+            lookahead: u32) -> Self {
         let (query_s, query_r) = channel();
         let (report_s, report_r) = channel();
 
@@ -414,7 +364,7 @@ impl BruteForceStrategy {
                 worker_id,
                 query_s.clone(),
                 report_s.clone()
-            ).run();
+            ).run(lookahead);
             bfs.workers.push(job_sender);
             bfs.work_handles.push(join_handle);
             records.push(store_sender);
@@ -426,7 +376,6 @@ impl BruteForceStrategy {
                 match query_r.recv(){
                     Ok(query) => {
                         if query.stop { break; }
-                        println!("query {:?}", query);
                         match query.score {
                             // lookup scores table and send value back - or 'Missing'
                             None => {
@@ -440,6 +389,7 @@ impl BruteForceStrategy {
                             },
                             // update scores table
                             Some(newscore) => {
+                                println!("query {:?} {:?}", query.hash.hash, newscore);
                                 store.scores.insert(
                                     query.hash.hash,
                                     newscore

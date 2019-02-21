@@ -1,7 +1,7 @@
 extern crate game;
 use game::bruteforce::BruteForceStrategy;
 use game::connectfour::ConnectFour;
-use game::generic::{Player,Strategy};
+use game::generic::Player;
 
 
 use std::time::{Instant};
@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usize, toplimit:u32) -> u64 {
-    let strategy = BruteForceStrategy::new(nworker);
+    let strategy = BruteForceStrategy::new(nworker, lookahead);
     let g = Rc::new(RefCell::new(game.clone()));
 
     let then = Instant::now();
