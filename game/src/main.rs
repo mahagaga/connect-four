@@ -24,11 +24,20 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
     tp
 }
 
+use std::env;
 fn main() {
-    
-    let nworker = 3;
-    let lookahead = 4;
-    let toplimit = 16;
+    let toplimit = match env::args().nth(1) {
+        Some(n) => n.parse::<u32>().unwrap(),
+        None => 16,
+    };
+    let lookahead = match env::args().nth(2) {
+        Some(n) => n.parse::<u32>().unwrap(),
+        None => 4,
+    };;
+    let nworker = match env::args().nth(3) {
+        Some(n) => n.parse::<usize>().unwrap(),
+        None => 3,
+    };
     let player = Player::White;
     let games = [ConnectFour::replicate(String::from("------
 
