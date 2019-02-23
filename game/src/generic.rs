@@ -9,6 +9,7 @@ use std::cell::RefCell;
 pub enum Player {
     Black,
     White,
+    Grey,
 }
 
 impl Player {
@@ -16,12 +17,14 @@ impl Player {
         match self {
             Player::Black => &Player::White,
             Player::White => &Player::Black,
+            Player::Grey => &Player::Grey,
         }
     }
     pub fn clone(&self) -> Player {
         match self {
             Player::Black => Player::Black,
             Player::White => Player::White,
+            Player::Grey => Player::Grey,
         }
     }
 }
@@ -31,6 +34,7 @@ impl std::fmt::Display for Player {
         match self {
             Player::Black => write!(f, "{}", String::from("Black")),
             Player::White => write!(f, "{}", String::from("White")),
+            Player::Grey => write!(f, "{}", String::from("Grey")),
         }
     }
 }

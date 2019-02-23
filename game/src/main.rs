@@ -18,6 +18,9 @@ fn time_pondering(game:&ConnectFour, player:&Player, lookahead:u32, nworker:usiz
     
     let store = strategy.collect_store();
     println!("store size {}", store.scores.keys().len());
+    for record in store.scores {
+        println!("{:?}", record);
+    }
     
     let now = Instant::now();
     let tp = now.duration_since(then).as_secs();
@@ -40,13 +43,13 @@ fn main() {
     };
     let player = Player::White;
     let games = [ConnectFour::replicate(String::from("------
-
-
-
+nnnnnn
+nnnnnn
+nnnn
 ox
-
-
-
+nnnn
+nnnnnn
+nnnnnn
 ------")),];
     let _timep = games.iter()
     .map(|game| {

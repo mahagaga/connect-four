@@ -33,6 +33,7 @@ fn to_hash(game:&ConnectFour, player:&Player) -> Hash {
 }*/
 
 use std::collections::HashMap;
+#[derive(Debug)]
 pub struct Store {
     pub scores: HashMap<String,ScoreEntry>,
 }
@@ -422,18 +423,21 @@ impl BruteForceStrategy {
             day_call: false,
         }).unwrap();
         
-        let mut i:u32 = 0;
+        let mut jobs = 0;
+        let mut done = 0;
         loop {
             match self.report_receiver.recv() {
                 Ok(interest) => {
                     println!("interest {:?} {:?}", interest.from, interest.hash);
                     match interest.hash {
                         Some(h) => {
-                            self.workers[(i%self.workers.len()as u32) as usize].send(JobM { 
+                            self.workers[(jobs%self.workers.len()as u32) as usize].send(JobM { 
                             hash: h, day_call: false }).unwrap();
+                            jobs += 1;
                         },
                         None => {
                             println!("{} done", interest.worker_id);
+                            done += 1;
                         }
                     }
                 },
@@ -442,8 +446,11 @@ impl BruteForceStrategy {
                     thread::sleep(std::time::Duration::new(5,0));
                 }
             }
-            i+=1;
-            if i>=toplimit {
+            if done >= jobs {
+                println!("all jobs done {}", done);
+                break;
+            }
+            if done>=toplimit {
                 println!("toplimit {} reached", toplimit);
                 break;
             }

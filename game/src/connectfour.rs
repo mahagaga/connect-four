@@ -85,6 +85,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
             self.field[n].push(match p {
                 Player::White => Some(Player::White),
                 Player::Black => Some(Player::Black),
+                Player::Grey => Some(Player::Grey),
             });
             self.get_score(p, n, self.field[n].len()-1)
         }
@@ -103,6 +104,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
                 match x {
                     Some(p) => match p { Player::White => { s.push_str("o"); },
                                          Player::Black => { s.push_str("x"); },
+                                         Player::Grey => { s.push_str("n")}
                     },
                     None => (),
                 }
@@ -152,6 +154,7 @@ impl ConnectFour {
                     Some(player) => match player {
                           Player::White => Some(Player::White),
                           Player::Black => Some(Player::Black),
+                          Player::Grey => Some(Player::Grey),
                     }, 
                     None => None, 
                 });
@@ -271,7 +274,8 @@ impl ConnectFour {
                             match c {
                                 'x' => &Player::Black,
                                 'o' => &Player::White,
-                                what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
+                                'n' => &Player::Grey,
+                                what => { println!("{}, {}", what, i); panic!(); },
                             },
                             Column::from_usize(i-1)
                         ).unwrap(); 
@@ -379,8 +383,8 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         }
 
         // copy current state into evaluation field
-        let black = |player: &Player| { match player { Player::Black => Cell::M, Player::White => Cell::O }};
-        let white = |player: &Player| { match player { Player::White => Cell::M, Player::Black => Cell::O }};
+        let black = |player: &Player| { match player { Player::Black => Cell::M, Player::White => Cell::O, Player::Grey => Cell::D, }};
+        let white = |player: &Player| { match player { Player::White => Cell::M, Player::Black => Cell::O, Player::Grey => Cell::D, }};
         let mut i:usize = 0;
         for c in g.borrow().state() { // that's the current Connect Four field
             let mut j:usize = 0;
@@ -388,6 +392,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
                 match f {
                     Some(Player::Black) => efield[i][j] = black(p),
                     Some(Player::White) => efield[i][j] = white(p),
+                    Some(Player::Grey) => efield[i][j] = Cell::D,
                     None => (),
                 }
                 j += 1;
