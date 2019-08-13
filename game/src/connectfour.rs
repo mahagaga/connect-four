@@ -1,5 +1,5 @@
 //pub mod generic;
-use generic::*;
+use generic::{Game,Move,Player,Score,Strategy,Withdraw};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -12,7 +12,7 @@ pub struct ConnectFour {
     field: Vec<Vec<Option<Player>>>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Column {
     One, Two, Three, Four, Five, Six, Seven, Zero
 }
@@ -62,8 +62,8 @@ impl Move<Column> for ConnectFourMove {
 }
 
 impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
-    fn possible_moves(&self, _: &Player) -> Vec<Rc<Move<Column>>> {
-        let mut allowed: Vec<Rc<Move<Column>>> = Vec::new();
+    fn possible_moves(&self, _: &Player) -> Vec<Rc<dyn Move<Column>>> {
+        let mut allowed: Vec<Rc<dyn Move<Column>>> = Vec::new();
         let mut i:usize = 0;
         for col in &self.field {
             if col.len() < ConnectFour::height() {
@@ -76,7 +76,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         allowed
     }
 
-    fn make_move(&mut self, p: &Player, mv: Rc<Move<Column>>) -> Result<Score, Withdraw> {
+    fn make_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
         if ConnectFour::height() == self.field[n].len() {
             // column is obviously already filled to the top
@@ -90,7 +90,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         }
     }
 
-    fn withdraw_move(&mut self, _p: &Player, mv: Rc<Move<Column>>) {
+    fn withdraw_move(&mut self, _p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
         self.field[n].pop();
     }
@@ -134,7 +134,7 @@ impl ConnectFour {
             field: Vec::with_capacity(ConnectFour::width()),
         };
         for _coln in 0..ConnectFour::width() {
-            let mut col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
+            let col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
             cf.field.push(col);
         };
         cf
@@ -331,8 +331,8 @@ impl ConnectFourStrategy {
 use std::cmp;
 impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
     
-    fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                     p: &Player, mv: Rc<Move<Column>>) 
+    fn evaluate_move(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+                     p: &Player, mv: Rc<dyn Move<Column>>) 
     -> Result<f32, Withdraw> {
         let n = mv.data().to_usize();
         let m = g.borrow().state()[n].len();
@@ -395,14 +395,14 @@ impl ConnectFourStrategy {
     }
 
     fn fill_in_dead_cells(&self, 
-            g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+            g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
             mut efield: Vec<Vec<Cell>>)  -> Vec<Vec<Cell>> {
         let mut mutable_game = g.borrow_mut();
         
         let mut cp = &Player::White;
         for col in 0..ConnectFour::width() {
             // look for mutual tabus
-            let mut mv = Rc::new(ConnectFourMove {
+            let mv = Rc::new(ConnectFourMove {
                 data: Column::from_usize(col) 
             });
             let mut i = 0;
@@ -433,8 +433,8 @@ impl ConnectFourStrategy {
 
     // comparing tabu rows before and after the move
     // panicks if the move is not allowed
-    fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                  p: &Player, mv: Rc<Move<Column>>)  -> f32 {
+    fn tabu_diff_score(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+                  p: &Player, mv: Rc<dyn Move<Column>>)  -> f32 {
         let ground_score = self.tabu_score(Rc::clone(&g), p);
 
         g.borrow_mut().make_move(p, Rc::clone(&mv)).unwrap();
@@ -448,7 +448,7 @@ impl ConnectFourStrategy {
         offense_score - defense_score * self.tabu_defense_koeff
     }
 
-    fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+    fn tabu_score(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player)  -> f32 {
         let mut mutable_game = g.borrow_mut();
         

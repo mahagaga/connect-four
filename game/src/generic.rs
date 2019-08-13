@@ -34,7 +34,7 @@ pub trait Move<T> {
     fn display(&self) -> String;
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Score {
     Undecided(f32),
     Remis(u32),
@@ -48,9 +48,9 @@ pub enum Withdraw {
 }
 
 pub trait Game<T,S> {
-    fn possible_moves(&self, p: &Player) -> Vec<Rc<Move<T>>>;
-    fn make_move(&mut self, p: &Player, m: Rc<Move<T>>) -> Result<Score, Withdraw>;
-    fn withdraw_move(&mut self, p: &Player, m: Rc<Move<T>>);
+    fn possible_moves(&self, p: &Player) -> Vec<Rc<dyn Move<T>>>;
+    fn make_move(&mut self, p: &Player, m: Rc<dyn Move<T>>) -> Result<Score, Withdraw>;
+    fn withdraw_move(&mut self, p: &Player, m: Rc<dyn Move<T>>);
     fn display(&self) -> String;
     fn state(&self) -> &S;
 }
@@ -58,19 +58,19 @@ pub trait Game<T,S> {
 //### strategy ####################################################################################
 
 pub trait Strategy<T,S> {
-    fn evaluate_move(&self, g: Rc<RefCell<Game<T,S>>>, p: &Player, m: Rc<Move<T>>) -> Result<f32, Withdraw>;
+    fn evaluate_move(&self, g: Rc<RefCell<dyn Game<T,S>>>, p: &Player, m: Rc<dyn Move<T>>) -> Result<f32, Withdraw>;
 
     fn find_best_move(&self, 
-            g: Rc<RefCell<Game<T,S>>>,
+            g: Rc<RefCell<dyn Game<T,S>>>,
             p: &Player,
             moves_ahead: i32,
             game_evaluation: bool
-        ) -> (Option<Rc<Move<T>>>, Option<Score>) {
+        ) -> (Option<Rc<dyn Move<T>>>, Option<Score>) {
 
         //let mut win_option: Option<Rc<Move<T>>> = None;
-        let mut remis_option: Option<(Rc<Move<T>>,u32)> = None;
-        let mut lost_options: Vec<(Rc<Move<T>>,u32)> = Vec::new();
-        let mut undecided_options: Vec<(Rc<Move<T>>, f32)> = Vec::new();
+        let mut remis_option: Option<(Rc<dyn Move<T>>,u32)> = None;
+        let mut lost_options: Vec<(Rc<dyn Move<T>>,u32)> = Vec::new();
+        let mut undecided_options: Vec<(Rc<dyn Move<T>>, f32)> = Vec::new();
         
         let options = g.borrow().possible_moves(p);
         for mv in options.into_iter() {
@@ -93,7 +93,7 @@ pub trait Strategy<T,S> {
             g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
         }
         
-        let mut still_undecided: Vec<(Rc<Move<T>>, f32)> = Vec::new();
+        let mut still_undecided: Vec<(Rc<dyn Move<T>>, f32)> = Vec::new();
         for (undecided, pv) in undecided_options {
             if moves_ahead > 0 {
                 let _ = g.borrow_mut().make_move(p, Rc::clone(&undecided));
@@ -116,7 +116,7 @@ pub trait Strategy<T,S> {
             }
         }
 
-        let mut undecided_option: Option<Rc<Move<T>>> = None;
+        let mut undecided_option: Option<Rc<dyn Move<T>>> = None;
         let mut undecided_pv = -1.0;
         for (undecided, pv) in still_undecided {
             if game_evaluation {

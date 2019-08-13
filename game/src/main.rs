@@ -29,9 +29,9 @@ fn time_pondering(game:&ConnectFour, nworker:i32, toplimit:i32, player:&Player) 
 
 fn main() {
     let nworker = 3;
-    let toplimit = 8;
+    let toplimit = 6;
     let player = Player::White;
-    let games = [ConnectFour::new(), replicate_game("------
+    let games = [/* ConnectFour::new(), replicate_game("------
 
 
 
@@ -39,7 +39,7 @@ fn main() {
 
 
 
-------"), replicate_game("------
+------"), */ replicate_game("------
 
 x
 
