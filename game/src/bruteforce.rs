@@ -68,7 +68,7 @@ pub struct GameRecord {
 }
 pub enum GameState {
     Locked,
-    Decided(Score),
+    Decided(Score, Option<Column>),
     Undecided,
 }
 pub struct BruteForceStrategy {
@@ -246,7 +246,6 @@ pub struct Interest {
     interested: Option<GameHash>,
     interesting: Option<GameHash>,
     worker_id: Option<usize>,
-    column: Option<Column>,
 }
 
 pub struct Conductor {
@@ -265,7 +264,7 @@ thread::spawn(move|| {
     let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
     let mut workers:Vec<Worker> = vec![0; 4]
         .into_iter()
-        .map(|i| Worker::spawn_worker(i, itx.clone()))
+        .map(|i| Worker::spawn_worker(i, itx.clone(), game_store.clone()))
         .collect();
 
     loop {
@@ -283,7 +282,7 @@ thread::spawn(move|| {
                     match (*gs).get(&finished) {
                         Some(record) => {
                             match &record.state {
-                                GameState::Decided(score) => {
+                                GameState::Decided(score, column) => {
                                     if let Some(interested) = interest_store.remove(&finished) {
                                         for jobhash in interested.into_iter() {
                                             let wid = (&workers).into_iter()
@@ -296,9 +295,9 @@ thread::spawn(move|| {
                                         for w in workers {
                                             w.job_box.send(-1).unwrap();
                                         }
-                                        final_verdict.clone().send(Verdict{
+                                        final_verdict.send(Verdict{
                                             score: score.clone(),
-                                            column: interest.column,
+                                            column: column.clone(),
                                         }).unwrap();
                                         break;
                                     }
@@ -341,7 +340,6 @@ thread::spawn(move|| {
             interesting:Some(hash),
             interested:None,
             worker_id:None,
-            column:None
         }).unwrap();
     }
 }
@@ -353,15 +351,65 @@ pub struct Worker {
 }
 
 impl Worker {
-    fn spawn_worker(wid:usize, interest:Sender<Interest>) -> Worker {
-        let (tx,jobs) = channel::<GameHash>();
-        thread::spawn(move|| {
-            loop {
-                if let Ok(hash) = jobs.recv() {
-                    if hash == -1 { break; }
-                }
+    fn do_the_job(
+            game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+            interest:&Sender<Interest>,
+            hash:GameHash) {
+        if !Worker::lock_hash(&game_store, hash) {
+            return ();
+        }
+        let mut game = game_from_hash(hash);
+        let decision = GameState::Undecided;
+        Worker::unlock_hash(&game_store, hash, decision);
+    }
+    fn lock_hash(
+            game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+            hash:GameHash) -> bool {
+        let mut gs = game_store.lock().unwrap();
+        if let Some(record) = (*gs).get(&hash) {
+            match record.state {
+                GameState::Undecided => {(*gs).insert(hash, GameRecord {
+                    state: GameState::Locked,
+                }); },
+                _ => return false,
             }
+        } else {
+            (*gs).insert(hash, GameRecord { 
+                state: GameState::Locked,
+            });
+        }
+        true
+    }
+    fn unlock_hash(
+            game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+            hash:GameHash,
+            state:GameState) {
+        let mut gs = game_store.lock().unwrap();
+        (*gs).insert(hash, GameRecord { 
+            state: state,
         });
+    }
+
+    fn spawn_worker(
+            wid:usize,
+            interest:Sender<Interest>,
+            game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>) -> Worker {
+        let (tx,jobs) = channel::<GameHash>();
+
+thread::spawn(move|| {
+    loop {
+        match jobs.recv() {
+            Err(e) => { println!("Job receive error - {}", e); }
+            Ok(-1) => { break; },
+            Ok(hash) => {
+                Worker::do_the_job(&game_store, &interest, hash);
+                interest.send(Interest{
+                    interested: Some(hash), interesting: None, worker_id: Some(wid),
+                });
+            },
+        }
+    }
+});
         Worker {
             pending_jobs:0,
             job_box:tx,
