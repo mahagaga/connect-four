@@ -19,6 +19,14 @@ use std::thread;
 
 type GameHash = i128;
 
+fn hash_from_game(game:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>) -> GameHash {
+    0
+}
+
+fn game_from_hash(hash:GameHash) -> ConnectFour {
+    ConnectFour::new()
+}
+
 pub struct GameRecord {
     state: GameState,
 }
@@ -291,9 +299,15 @@ thread::spawn(move|| {
     fn claim_public_interest(&self,
             g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>
         ) {
+        let hash = hash_from_game(g);
         let sender = self.sender.clone();
+        sender.send(Interest{
+            interesting:Some(hash),
+            interested:None,
+            worker_id:None,
+            column:None
+        }).unwrap();
     }
-
 }
 
 pub struct Worker {
