@@ -20,11 +20,47 @@ use std::thread;
 type GameHash = i128;
 
 fn hash_from_game(game:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>) -> GameHash {
-    0
+    let mut s = 0;
+    let mut f = 1;
+    let mut ci = 0;
+    let base:i128 = 4;
+    for c in game.borrow().state() {
+        for x in c {
+            match x {
+                Some(p) => match p {
+                    Player::White => { s += 1 * f; },
+                    Player::Black => { s += 2 * f; },
+                },
+                None => (),
+            }
+            f *= base;
+        }
+        ci += 1;
+        f = base.pow(ConnectFour::height() as u32 * ci);
+    }
+    s
 }
 
 fn game_from_hash(hash:GameHash) -> ConnectFour {
-    ConnectFour::new()
+    let mut game = ConnectFour::new();
+    let mut h = hash;
+    let base:i128 = 4;
+    for ci in 0..ConnectFour::width() {
+        let col = Column::from_usize(ci);
+        let mut cr = h % base.pow(ConnectFour::height() as u32);
+        for _ri in 0..ConnectFour::height() {
+            let stone = cr % base;
+            match stone {
+                1 => { game.drop_stone(&Player::White, col.clone()).unwrap(); },
+                2 => { game.drop_stone(&Player::Black, col.clone()).unwrap(); },
+                0 => break,
+                _ => (),
+            }
+            cr = cr / base;
+        }
+        h = h / base.pow(ConnectFour::height() as u32);
+    }
+    game
 }
 
 pub struct GameRecord {
