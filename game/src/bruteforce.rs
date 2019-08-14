@@ -137,8 +137,8 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
             _game_evaluation: bool
         ) -> (Option<Rc<dyn Move<Column>>>, Option<Score>) {
         
-        let (sender,receiver) = self.init_conductor_and_band();
-        self.claim_public_interest(sender, g);
+        let (conductor, receiver) = Conductor::init_conductor_and_band();
+        conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
         
         (Some(Rc::new(ConnectFourMove{ data:column })), Some(score))
@@ -182,7 +182,34 @@ impl BruteForceStrategy {
         scoremap
     }
 
-    fn init_conductor_and_band (&self) -> (Sender<Interest>, Receiver<Verdict>) {
+    fn await_verdict(&self,
+            receiver:Receiver<Verdict>
+        ) -> (Column, Score) {
+        (Column::One, Score::Undecided(0.0))
+    }
+}
+
+fn from_move(mv:ConnectFourMove) -> Column {
+    Column::One
+}
+
+struct Verdict {
+    score: Score,
+    column: Column,
+}
+
+pub struct Interest {
+    interested: Option<GameHash>,
+    interesting: Option<GameHash>,
+    worker_id: Option<usize>,
+}
+
+pub struct Conductor {
+    sender:Sender<Interest>,
+}
+
+impl Conductor {
+    fn init_conductor_and_band () -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
@@ -231,36 +258,15 @@ impl BruteForceStrategy {
                 }
             }
         });
-        (interest, rx)
+        (Conductor{sender:interest}, rx)
     }
 
     fn claim_public_interest(&self,
-            sender: Sender<Interest>,
             g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>
         ) {
-        
+        let sender = self.sender.clone();
     }
 
-    fn await_verdict(&self,
-            receiver:Receiver<Verdict>
-        ) -> (Column, Score) {
-        (Column::One, Score::Undecided(0.0))
-    }
-}
-
-fn from_move(mv:ConnectFourMove) -> Column {
-    Column::One
-}
-
-struct Verdict {
-    score: Score,
-    column: Column,
-}
-
-pub struct Interest {
-    interested: Option<GameHash>,
-    interesting: Option<GameHash>,
-    worker_id: Option<usize>,
 }
 
 pub struct Worker {
