@@ -17,7 +17,7 @@ use std::thread;
 
 //### connect four strategy #######################################################################
 
-type GameHash = i64;
+type GameHash = i128;
 
 pub struct GameRecord {
     state: GameState,
@@ -195,13 +195,14 @@ fn from_move(mv:ConnectFourMove) -> Column {
 
 struct Verdict {
     score: Score,
-    column: Column,
+    column: Option<Column>,
 }
 
 pub struct Interest {
     interested: Option<GameHash>,
     interesting: Option<GameHash>,
     worker_id: Option<usize>,
+    column: Option<Column>,
 }
 
 pub struct Conductor {
@@ -211,54 +212,80 @@ pub struct Conductor {
 impl Conductor {
     fn init_conductor_and_band () -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
-        let interest = itx.clone();
+        let interest_sender = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
         
         let game_store = Arc::new(Mutex::new(HashMap::<GameHash,GameRecord>::new()));
 
-        thread::spawn(move|| {
-            let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
-            let mut workers:Vec<Worker> = vec![0; 4]
-                .into_iter()
-                .map(|i| Worker::spawn_worker(i, itx.clone()))
-                .collect();
-           
-            loop {
-                if let Ok(interest) = interests.recv() {
-                    // worker has finished job
-                    if let None = interest.interesting {
-                        // note changed job pendencies
-                        let worker_id = interest.worker_id.unwrap();
-                        workers.get_mut(worker_id).unwrap().pending_jobs -= 1;
-                        // submit new jobs if this game is now decided
-                        let finished = interest.interested.unwrap();
-                        let gs = game_store.lock().unwrap();
-                        match (*gs).get(&finished) {
-                            Some(record) => {
-                                match &record.state {
-                                    GameState::Decided(_) => {
-                                        let interested = interest_store.get(&finished).unwrap();
+thread::spawn(move|| {
+    let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
+    let mut workers:Vec<Worker> = vec![0; 4]
+        .into_iter()
+        .map(|i| Worker::spawn_worker(i, itx.clone()))
+        .collect();
+
+    loop {
+        if let Ok(interest) = interests.recv() {
+            match (interest.interesting, interest.interested) {
+                // worker has finished job
+                (None, Some(interested))=> {
+                    // note changed job pendencies
+                    let worker_id = interest.worker_id.unwrap();
+                    workers.get_mut(worker_id).unwrap().pending_jobs -= 1;
+
+                    // submit new jobs if this game is decided now
+                    let finished = interested;
+                    let gs = game_store.lock().unwrap();
+                    match (*gs).get(&finished) {
+                        Some(record) => {
+                            match &record.state {
+                                GameState::Decided(score) => {
+                                    if let Some(interested) = interest_store.remove(&finished) {
                                         for jobhash in interested.into_iter() {
-                                            let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
+                                            let wid = (&workers).into_iter()
+                                                .min_by_key(|w| w.pending_jobs).unwrap().id;
                                             let worker = workers.get_mut(wid).unwrap();
-                                            worker.job_box.send(*jobhash).unwrap();
+                                            worker.job_box.send(jobhash).unwrap();
                                             worker.pending_jobs += 1;
                                         }
-                                    },
-                                    GameState::Locked => panic!("shouldn't happen!?"),
-                                    GameState::Undecided => (),
-                                }
-                            },
-                            None => panic!("is not possibly possible!"),
+                                    } else {
+                                        for w in workers {
+                                            w.job_box.send(-1).unwrap();
+                                        }
+                                        final_verdict.clone().send(Verdict{
+                                            score: score.clone(),
+                                            column: interest.column,
+                                        }).unwrap();
+                                        break;
+                                    }
+                                },
+                                GameState::Locked => panic!("shouldn't happen!?"),
+                                GameState::Undecided => (),
+                            }
+                        },
+                        None => panic!("game should have a record!"),
+                    }
+                },
+                // claimed interest
+                (Some(interesting), parent) => {
+                    if let Some(interested) = parent {
+                        if let Some(record) = interest_store.get_mut(&interesting) {
+                            record.push(interested);
+                        } else {
+                            interest_store.insert(interesting, vec![interested]);
                         }
-                        
-                    } else { // submit new job (unless it's the final verdict)
-
-                    }         
-                }
-            }
-        });
-        (Conductor{sender:interest}, rx)
+                    }
+                    let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
+                    let worker = workers.get_mut(wid).unwrap();
+                    worker.job_box.send(interesting).unwrap();
+                    worker.pending_jobs += 1;
+                },
+                (None, None) => panic!("doesn't make sense"),
+            }         
+        }
+    }
+});
+        (Conductor{sender:interest_sender}, rx)
     }
 
     fn claim_public_interest(&self,
@@ -281,7 +308,7 @@ impl Worker {
         thread::spawn(move|| {
             loop {
                 if let Ok(hash) = jobs.recv() {
-
+                    if hash == -1 { break; }
                 }
             }
         });
