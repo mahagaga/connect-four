@@ -28,7 +28,7 @@ pub enum GameState {
     Undecided,
 }
 pub struct BruteForceStrategy {
-    pub nworkers: i32,
+    pub nworkers: usize,
 }
 
 enum Cell {
@@ -144,7 +144,6 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
         (Some(Rc::new(ConnectFourMove{ data:column })), Some(score))
     }
 }
-
 impl BruteForceStrategy {
     pub fn default() -> Self {
         BruteForceStrategy {
@@ -183,15 +182,20 @@ impl BruteForceStrategy {
         scoremap
     }
 
-    fn init_conductor_and_band(&self) -> (Sender<Interest>, Receiver<Verdict>) {
+    fn init_conductor_and_band (&self) -> (Sender<Interest>, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
+        let interest = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
         
         let game_store = Arc::new(Mutex::new(HashMap::<GameHash,GameRecord>::new()));
 
         thread::spawn(move|| {
             let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
-            let mut workers:Vec<Worker> = Vec::new();
+            let mut workers:Vec<Worker> = vec![0; 4]
+                .into_iter()
+                .map(|i| Worker::spawn_worker(i, itx.clone()))
+                .collect();
+           
             loop {
                 if let Ok(interest) = interests.recv() {
                     // worker has finished job
@@ -205,7 +209,15 @@ impl BruteForceStrategy {
                         match (*gs).get(&finished) {
                             Some(record) => {
                                 match &record.state {
-                                    GameState::Decided(_) => (),
+                                    GameState::Decided(_) => {
+                                        let interested = interest_store.get(&finished).unwrap();
+                                        for jobhash in interested.into_iter() {
+                                            let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
+                                            let worker = workers.get_mut(wid).unwrap();
+                                            worker.job_box.send(*jobhash).unwrap();
+                                            worker.pending_jobs += 1;
+                                        }
+                                    },
                                     GameState::Locked => panic!("shouldn't happen!?"),
                                     GameState::Undecided => (),
                                 }
@@ -219,9 +231,7 @@ impl BruteForceStrategy {
                 }
             }
         });
-        (itx, rx)
-    
-
+        (interest, rx)
     }
 
     fn claim_public_interest(&self,
@@ -247,14 +257,32 @@ struct Verdict {
     column: Column,
 }
 
-struct Interest {
+pub struct Interest {
     interested: Option<GameHash>,
     interesting: Option<GameHash>,
     worker_id: Option<usize>,
 }
 
-
 pub struct Worker {
     pending_jobs: u128,
     job_box: Sender<GameHash>,
+    id: usize,
+}
+
+impl Worker {
+    fn spawn_worker(wid:usize, interest:Sender<Interest>) -> Worker {
+        let (tx,jobs) = channel::<GameHash>();
+        thread::spawn(move|| {
+            loop {
+                if let Ok(hash) = jobs.recv() {
+
+                }
+            }
+        });
+        Worker {
+            pending_jobs:0,
+            job_box:tx,
+            id:wid
+        }
+    }
 }
