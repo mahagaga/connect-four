@@ -5,10 +5,11 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Player {
     Black,
     White,
+    Gray,
 }
 
 impl Player {
@@ -16,6 +17,7 @@ impl Player {
         match self {
             Player::Black => &Player::White,
             Player::White => &Player::Black,
+            Player::Gray => &Player::Gray,
         }
     }
 }
@@ -25,6 +27,7 @@ impl std::fmt::Display for Player {
         match self {
             Player::Black => write!(f, "{}", String::from("Black")),
             Player::White => write!(f, "{}", String::from("White")),
+            Player::Gray => write!(f, "{}", String::from("Gray")),
         }
     }
 }

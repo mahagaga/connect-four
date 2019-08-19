@@ -5,7 +5,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
-use std::cmp;
 use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread;
 
@@ -30,6 +29,7 @@ fn hash_from_game(game:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>) -
                 Some(p) => match p {
                     Player::White => { s += 1 * f; },
                     Player::Black => { s += 2 * f; },
+                    Player::Gray => { s += 2 * f; },
                 },
                 None => (),
             }
@@ -53,6 +53,7 @@ fn game_from_hash(hash:GameHash) -> ConnectFour {
             match stone {
                 1 => { game.drop_stone(&Player::White, col.clone()).unwrap(); },
                 2 => { game.drop_stone(&Player::Black, col.clone()).unwrap(); },
+                3 => { game.drop_stone(&Player::Gray, col.clone()).unwrap(); },
                 0 => break,
                 _ => (),
             }
@@ -153,8 +154,10 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
         }
 
         // copy current state into evaluation field
-        let black = |player: &Player| { match player { Player::Black => Cell::M, Player::White => Cell::O }};
-        let white = |player: &Player| { match player { Player::White => Cell::M, Player::Black => Cell::O }};
+        let black = |player: &Player| { match player {
+            Player::Black => Cell::M, Player::White => Cell::O, Player::Gray => Cell::D, }};
+        let white = |player: &Player| { match player {
+            Player::White => Cell::M, Player::Black => Cell::O, Player::Gray => Cell::D, }};
         let mut i:usize = 0;
         for c in g.borrow().state() { // that's the current Connect Four field
             let mut j:usize = 0;
@@ -162,6 +165,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
                 match f {
                     Some(Player::Black) => efield[i][j] = black(p),
                     Some(Player::White) => efield[i][j] = white(p),
+                    Some(Player::Gray) => efield[i][j] = Cell::D,
                     None => (),
                 }
                 j += 1;
@@ -181,7 +185,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
             _game_evaluation: bool
         ) -> (Option<Rc<dyn Move<Column>>>, Option<Score>) {
         
-        let (conductor, receiver) = Conductor::init_conductor_and_band();
+        let (conductor, receiver) = Conductor::init_conductor_and_band(moves_ahead, p);
         conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
         
@@ -189,9 +193,9 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
     }
 }
 impl BruteForceStrategy {
-    pub fn default() -> Self {
+    pub fn new(nworkers:usize) -> Self {
         BruteForceStrategy {
-            nworkers: 3,
+            nworkers: nworkers,
         }
     }
 
@@ -253,18 +257,19 @@ pub struct Conductor {
 }
 
 impl Conductor {
-    fn init_conductor_and_band () -> (Self, Receiver<Verdict>) {
+    fn init_conductor_and_band (moves_ahead:i32, p:&Player) -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest_sender = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
         
         let game_store = Arc::new(Mutex::new(HashMap::<GameHash,GameRecord>::new()));
+        let player = p.clone();
 
 thread::spawn(move|| {
     let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
     let mut workers:Vec<Worker> = vec![0; 4]
         .into_iter()
-        .map(|i| Worker::spawn_worker(i, itx.clone(), game_store.clone()))
+        .map(|i| Worker::spawn_worker(i, itx.clone(), moves_ahead, game_store.clone()))
         .collect();
 
     loop {
@@ -288,12 +293,12 @@ thread::spawn(move|| {
                                             let wid = (&workers).into_iter()
                                                 .min_by_key(|w| w.pending_jobs).unwrap().id;
                                             let worker = workers.get_mut(wid).unwrap();
-                                            worker.job_box.send(jobhash).unwrap();
+                                            worker.job_box.send((jobhash, player.clone())).unwrap();
                                             worker.pending_jobs += 1;
                                         }
                                     } else {
                                         for w in workers {
-                                            w.job_box.send(-1).unwrap();
+                                            w.job_box.send((-1, Player::Black)).unwrap();
                                         }
                                         final_verdict.send(Verdict{
                                             score: score.clone(),
@@ -320,7 +325,7 @@ thread::spawn(move|| {
                     }
                     let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
                     let worker = workers.get_mut(wid).unwrap();
-                    worker.job_box.send(interesting).unwrap();
+                    worker.job_box.send((interesting, player.clone())).unwrap();
                     worker.pending_jobs += 1;
                 },
                 (None, None) => panic!("doesn't make sense"),
@@ -328,11 +333,11 @@ thread::spawn(move|| {
         }
     }
 });
-        (Conductor{sender:interest_sender}, rx)
+        (Conductor{sender:interest_sender,}, rx)
     }
 
     fn claim_public_interest(&self,
-            g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>
+            g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
         ) {
         let hash = hash_from_game(g);
         let sender = self.sender.clone();
@@ -346,21 +351,63 @@ thread::spawn(move|| {
 
 pub struct Worker {
     pending_jobs: u128,
-    job_box: Sender<GameHash>,
+    job_box: Sender<(GameHash,Player)>,
     id: usize,
 }
 
 impl Worker {
+    fn two_moves_ahead_inquiry(
+        game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+        game:ConnectFour,
+        p:&Player
+    ) -> GameState {
+        return GameState::Undecided
+    }
+    fn game_simulation(
+        moves_ahead:i32,
+        game:ConnectFour,
+        p:&Player
+    ) -> GameState {
+        return GameState::Undecided
+    }
+    fn claim_interests(
+        interest:&Sender<Interest>,
+        game:ConnectFour,
+        p:&Player
+    ) {
+        ()
+    }
     fn do_the_job(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+            moves_ahead:i32,
             interest:&Sender<Interest>,
-            hash:GameHash) {
+            hash:GameHash,
+            p:&Player) {
+        // return if game is locked or decided
         if !Worker::lock_hash(&game_store, hash) {
             return ();
         }
-        let mut game = game_from_hash(hash);
-        let decision = GameState::Undecided;
-        Worker::unlock_hash(&game_store, hash, decision);
+        let game = game_from_hash(hash);
+        // 1. try to find a solution from the game store two moves ahead
+        match Worker::two_moves_ahead_inquiry(&game_store, game.clone(), p) {
+            GameState::Decided(verdict, mv) => { 
+                return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+            },
+            GameState::Locked => panic!("unexpected state at this state"),
+            GameState::Undecided => (),
+        }
+        // 2. try to find a solution from game simulation
+        match Worker::game_simulation(moves_ahead, game.clone(), p) {
+            GameState::Decided(verdict, mv) => { 
+                return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+            },
+            GameState::Locked => panic!("unexpected state at this state"),
+            GameState::Undecided => {
+        // 3. claim interest for the remaining undecided games two moves ahead
+                Worker::claim_interests(interest, game.clone(), p);
+                return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
+            },
+        }
     }
     fn lock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
@@ -393,19 +440,21 @@ impl Worker {
     fn spawn_worker(
             wid:usize,
             interest:Sender<Interest>,
+            moves_ahead:i32,
             game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>) -> Worker {
-        let (tx,jobs) = channel::<GameHash>();
+        let (tx,jobs) = channel::<(GameHash,Player)>();
+        let moves_ahead = moves_ahead;
 
 thread::spawn(move|| {
     loop {
         match jobs.recv() {
             Err(e) => { println!("Job receive error - {}", e); }
-            Ok(-1) => { break; },
-            Ok(hash) => {
-                Worker::do_the_job(&game_store, &interest, hash);
+            Ok((-1,_)) => { break; },
+            Ok((hash,p)) => {
+                Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p);
                 interest.send(Interest{
                     interested: Some(hash), interesting: None, worker_id: Some(wid),
-                });
+                }).unwrap();
             },
         }
     }

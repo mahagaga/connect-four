@@ -8,8 +8,8 @@ use std::time::{Instant};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-fn time_pondering(game:&ConnectFour, nworker:i32, toplimit:i32, player:&Player) -> u64 {
-    let strategy = BruteForceStrategy::default();
+fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player) -> u64 {
+    let strategy = BruteForceStrategy::new(nworker);
     let g = Rc::new(RefCell::new(game.clone()));
 
     let then = Instant::now();
