@@ -358,21 +358,122 @@ pub struct Worker {
 impl Worker {
     fn two_moves_ahead_inquiry(
         game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
-        game:ConnectFour,
-        p:&Player
+        g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+        p:&Player,
     ) -> GameState {
-        return GameState::Undecided
+        let options = g.borrow().possible_moves(p);
+        if options.is_empty() {
+            return GameState::Decided(Score::Remis(0), None);
+        }
+
+        let mut draw_moves = Vec::<(Score,Column)>::new();
+        let mut doomed_moves = Vec::<(Score,Column)>::new();
+        let mut open_moves = Vec::<GameHash>::new();
+
+        for mv in options.into_iter() {
+            let score = g.borrow_mut().make_move(p, Rc::clone(&mv));
+            match score {
+                Ok(score) => match score {
+                    Score::Won(in_n) => {
+                        g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
+                        return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
+                    },
+                    Score::Undecided(_) => {
+                        let anti_options = g.borrow().possible_moves(p.opponent());
+                        if anti_options.is_empty() {
+                            draw_moves.push((Score::Remis(1), mv.data().clone())); ;
+                        } else {
+                            let mut anti_draw_moves = Vec::<(Score,Column)>::new();
+                            let mut anti_doomed_moves = Vec::<(Score,Column)>::new();
+                            let mut anti_open_moves = Vec::<GameHash>::new();
+
+                            for anti_mv in anti_options.into_iter() {
+                                let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
+                                match anti_score {
+                                    Ok(score) => match score {
+                                        Score::Won(in_n) => {
+                                            doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
+                                            g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                            break;
+                                        },
+                                        Score::Lost(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                                        Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                                        Score::Undecided(_) => {
+                                            let hash = hash_from_game(g.clone());
+                                            let gs = game_store.lock().unwrap();
+                                            if let Some(record) = (*gs).get(&hash) {
+                                                match &record.state {
+                                                    GameState::Decided(record_score,_) => match record_score {
+                                                        Score::Lost(in_n) => {
+                                                            doomed_moves.push((Score::Lost(in_n+1), mv.data().clone()));
+                                                            g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                                            break;
+                                                        },
+                                                        Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                                                        Score::Won(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                                                        Score::Undecided(_) => { anti_open_moves.push(hash); },
+                                                    }
+                                                    _ => { anti_open_moves.push(hash); },
+                                                }
+                                            } else { anti_open_moves.push(hash); }
+                                        },
+                                    },
+                                    Err(_) => panic!("unexpected error in anti move"),
+                                }
+                                g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                            }
+
+
+                            if !anti_open_moves.is_empty() {
+                                for interesting_hash in anti_open_moves.into_iter() {
+                                    open_moves.push(interesting_hash);
+                                }
+                            } else if !anti_draw_moves.is_empty() {
+                                let (score, _) = anti_draw_moves.first().unwrap();
+                                if let Score::Remis(in_n) = score {
+                                    draw_moves.push((Score::Remis(in_n+1), mv.data().clone()));
+                                }
+                            } else if !anti_doomed_moves.is_empty() {
+                                let (score, _) = anti_doomed_moves.first().unwrap();
+                                if let Score::Lost(in_n) = score {
+                                    g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
+                                    return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
+                                }
+                            }
+
+
+                        }
+                    },
+                    Score::Remis(in_n) => { draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                    Score::Lost(in_n) => { doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                },
+                Err(_) => panic!("unexpected error in move"),
+            }
+            g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
+        }
+
+        if !open_moves.is_empty() {
+            return GameState::Undecided;
+        } else if !draw_moves.is_empty() {
+            let (score, col) = draw_moves.first().unwrap();
+            return GameState::Decided(score.clone(), Some(col.clone()));
+        } else if !doomed_moves.is_empty() {
+            let (score, col) = draw_moves.first().unwrap();
+            return GameState::Decided(score.clone(), Some(col.clone()));
+        }
+        GameState::Undecided
     }
+
     fn game_simulation(
         moves_ahead:i32,
-        game:ConnectFour,
+        g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
         p:&Player
     ) -> GameState {
         return GameState::Undecided
     }
     fn claim_interests(
         interest:&Sender<Interest>,
-        game:ConnectFour,
+        g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
         p:&Player
     ) {
         ()
@@ -387,7 +488,9 @@ impl Worker {
         if !Worker::lock_hash(&game_store, hash) {
             return ();
         }
-        let game = game_from_hash(hash);
+
+        let game = Rc::new(RefCell::new(game_from_hash(hash)));
+
         // 1. try to find a solution from the game store two moves ahead
         match Worker::two_moves_ahead_inquiry(&game_store, game.clone(), p) {
             GameState::Decided(verdict, mv) => { 
