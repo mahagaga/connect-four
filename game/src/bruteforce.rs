@@ -1,6 +1,6 @@
 //pub mod generic;
 use generic::{Game,Move,Player,Score,Strategy,Withdraw};
-use connectfour::{Column,ConnectFour,ConnectFourMove};
+use connectfour::{Column,ConnectFour,ConnectFourMove,ConnectFourStrategy};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -437,15 +437,33 @@ impl Worker {
         g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
         p:&Player
     ) -> GameState {
-        return GameState::Undecided
+        let cfs = ConnectFourStrategy::default();
+        match cfs.find_best_move(g,p,moves_ahead,true) {
+            (Some(mv), Some(score)) => match score {
+                Score::Undecided(_) => GameState::Undecided,
+                score => GameState::Decided(score, Some(mv.data().clone())),
+            },
+            (_,_) => GameState::Undecided,
+        }
     }
+
     fn claim_interests(
         interest_sender:&Sender<Interest>,
         interesting_hashes:Vec<GameHash>,
-        p:&Player
+        parent_hash:GameHash,
     ) {
-        ()
+        interesting_hashes.into_iter()
+        .map(|ih| {
+            Interest { 
+                interested: Some(parent_hash),
+                interesting: Some(ih),
+                worker_id: None,
+            }
+        }).map(|im| {
+            interest_sender.send(im).unwrap();
+        }).for_each(drop);
     }
+
     fn do_the_job(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
             moves_ahead:i32,
@@ -477,7 +495,7 @@ impl Worker {
             GameState::Locked => panic!("unexpected state at this state"),
             GameState::Undecided => {
         // 3. claim interest for the remaining undecided games two moves ahead
-                Worker::claim_interests(interest, interesting_hashes, p);
+                Worker::claim_interests(interest, interesting_hashes, hash);
                 return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
             },
         }
