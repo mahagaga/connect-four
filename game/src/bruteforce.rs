@@ -192,6 +192,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
         (Some(Rc::new(ConnectFourMove{ data:column })), Some(score))
     }
 }
+
 impl BruteForceStrategy {
     pub fn new(nworkers:usize) -> Self {
         BruteForceStrategy {
@@ -199,46 +200,11 @@ impl BruteForceStrategy {
         }
     }
 
-    fn find_distinctive_moves(&self, 
-            g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
-            p: &Player,
-            moves_ahead: i32,
-        ) -> HashMap<Column,Score> {
-
-        let mut scoremap = HashMap::new();
-        
-        let options = g.borrow().possible_moves(p);
-        for mv in options.into_iter() {
-            let score = g.borrow_mut().make_move(p, Rc::clone(&mv));
-                                 
-            match score {
-                Ok(score) => match score {
-                    Score::Won(in_n) => {
-                        //println!("{}", &g.borrow().display());
-                        //println!("{:?} wins with {:?} in {}", p, mv.display(), in_n);
-                        g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
-                        scoremap.insert((*Rc::clone(&mv)).data().clone(), score);
-                        return scoremap;
-                    },
-                    Score::Undecided(pv) => {  },
-                    _ => { scoremap.insert((*Rc::clone(&mv)).data().clone(), score); },
-                },
-                Err(_) => (),//return Err(_),
-            }
-            g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
-        }
-        scoremap
-    }
-
     fn await_verdict(&self,
             receiver:Receiver<Verdict>
         ) -> (Column, Score) {
         (Column::One, Score::Undecided(0.0))
     }
-}
-
-fn from_move(mv:ConnectFourMove) -> Column {
-    Column::One
 }
 
 struct Verdict {
@@ -362,7 +328,7 @@ impl Worker {
         p:&Player,
     ) -> GameState {
         let options = g.borrow().possible_moves(p);
-        if options.is_empty() {
+        if options.is_empty() { // no possible moves left: stalemate
             return GameState::Decided(Score::Remis(0), None);
         }
 
@@ -374,13 +340,15 @@ impl Worker {
             let score = g.borrow_mut().make_move(p, Rc::clone(&mv));
             match score {
                 Ok(score) => match score {
+                    // found a winning move: immediate return
                     Score::Won(in_n) => {
                         g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
                         return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
                     },
+                    // found an undecided move, winning is still an option: let opponent make a move
                     Score::Undecided(_) => {
                         let anti_options = g.borrow().possible_moves(p.opponent());
-                        if anti_options.is_empty() {
+                        if anti_options.is_empty() { // no possible moves left: stalemate
                             draw_moves.push((Score::Remis(1), mv.data().clone())); ;
                         } else {
                             let mut anti_draw_moves = Vec::<(Score,Column)>::new();
@@ -391,20 +359,20 @@ impl Worker {
                                 let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
                                 match anti_score {
                                     Ok(score) => match score {
-                                        Score::Won(in_n) => {
+                                        Score::Won(in_n) => { // opponent has a winning move: losing
                                             doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
                                             g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
                                             break;
                                         },
                                         Score::Lost(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
                                         Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
-                                        Score::Undecided(_) => {
+                                        Score::Undecided(_) => { // unclear from the bord: check game store
                                             let hash = hash_from_game(g.clone());
                                             let gs = game_store.lock().unwrap();
                                             if let Some(record) = (*gs).get(&hash) {
                                                 match &record.state {
                                                     GameState::Decided(record_score,_) => match record_score {
-                                                        Score::Lost(in_n) => {
+                                                        Score::Lost(in_n) => { // opponent can reach a lost game: losing
                                                             doomed_moves.push((Score::Lost(in_n+1), mv.data().clone()));
                                                             g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
                                                             break;
@@ -423,24 +391,23 @@ impl Worker {
                                 g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
                             }
 
-
-                            if !anti_open_moves.is_empty() {
+                            // if opponent has a winning move, the loop was broken and the triage below is not executed
+                            if !anti_open_moves.is_empty() { // best opponent move is undecided
                                 for interesting_hash in anti_open_moves.into_iter() {
                                     open_moves.push(interesting_hash);
                                 }
-                            } else if !anti_draw_moves.is_empty() {
+                            } else if !anti_draw_moves.is_empty() { // best opponent move leads to a draw
                                 let (score, _) = anti_draw_moves.first().unwrap();
                                 if let Score::Remis(in_n) = score {
                                     draw_moves.push((Score::Remis(in_n+1), mv.data().clone()));
                                 }
-                            } else if !anti_doomed_moves.is_empty() {
+                            } else if !anti_doomed_moves.is_empty() { // opponent can only lose
                                 let (score, _) = anti_doomed_moves.first().unwrap();
                                 if let Score::Lost(in_n) = score {
                                     g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
                                     return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
                                 }
                             }
-
 
                         }
                     },
@@ -452,12 +419,13 @@ impl Worker {
             g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
         }
 
-        if !open_moves.is_empty() {
+        // if there is a winning move, it was returned already
+        if !open_moves.is_empty() { // best move is yet undecided
             return GameState::Undecided;
-        } else if !draw_moves.is_empty() {
+        } else if !draw_moves.is_empty() { // best move is a draw
             let (score, col) = draw_moves.first().unwrap();
             return GameState::Decided(score.clone(), Some(col.clone()));
-        } else if !doomed_moves.is_empty() {
+        } else if !doomed_moves.is_empty() { // all is lost
             let (score, col) = draw_moves.first().unwrap();
             return GameState::Decided(score.clone(), Some(col.clone()));
         }
