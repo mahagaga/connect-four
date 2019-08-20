@@ -326,10 +326,10 @@ impl Worker {
         game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
         g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
         p:&Player,
-    ) -> GameState {
+    ) -> (GameState,Vec<GameHash>) {
         let options = g.borrow().possible_moves(p);
         if options.is_empty() { // no possible moves left: stalemate
-            return GameState::Decided(Score::Remis(0), None);
+            return (GameState::Decided(Score::Remis(0), None), vec![]);
         }
 
         let mut draw_moves = Vec::<(Score,Column)>::new();
@@ -343,7 +343,7 @@ impl Worker {
                     // found a winning move: immediate return
                     Score::Won(in_n) => {
                         g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
-                        return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
+                        return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
                     },
                     // found an undecided move, winning is still an option: let opponent make a move
                     Score::Undecided(_) => {
@@ -405,7 +405,7 @@ impl Worker {
                                 let (score, _) = anti_doomed_moves.first().unwrap();
                                 if let Score::Lost(in_n) = score {
                                     g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
-                                    return GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone()));
+                                    return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
                                 }
                             }
 
@@ -421,15 +421,15 @@ impl Worker {
 
         // if there is a winning move, it was returned already
         if !open_moves.is_empty() { // best move is yet undecided
-            return GameState::Undecided;
+            return (GameState::Undecided, open_moves);
         } else if !draw_moves.is_empty() { // best move is a draw
             let (score, col) = draw_moves.first().unwrap();
-            return GameState::Decided(score.clone(), Some(col.clone()));
+            return (GameState::Decided(score.clone(), Some(col.clone())), vec![]);
         } else if !doomed_moves.is_empty() { // all is lost
             let (score, col) = draw_moves.first().unwrap();
-            return GameState::Decided(score.clone(), Some(col.clone()));
+            return (GameState::Decided(score.clone(), Some(col.clone())), vec![]);
         }
-        GameState::Undecided
+        (GameState::Undecided, vec![])
     }
 
     fn game_simulation(
@@ -440,8 +440,8 @@ impl Worker {
         return GameState::Undecided
     }
     fn claim_interests(
-        interest:&Sender<Interest>,
-        g:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+        interest_sender:&Sender<Interest>,
+        interesting_hashes:Vec<GameHash>,
         p:&Player
     ) {
         ()
@@ -458,14 +458,16 @@ impl Worker {
         }
 
         let game = Rc::new(RefCell::new(game_from_hash(hash)));
-
+        let interesting_hashes;
         // 1. try to find a solution from the game store two moves ahead
         match Worker::two_moves_ahead_inquiry(&game_store, game.clone(), p) {
-            GameState::Decided(verdict, mv) => { 
+            (GameState::Decided(verdict, mv),_) => { 
                 return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
             },
-            GameState::Locked => panic!("unexpected state at this state"),
-            GameState::Undecided => (),
+            (GameState::Locked,_) => panic!("unexpected state at this state"),
+            // TODO: if necessary, defer the interesting hashes from the game simulation and not the two moves inquiry
+            //       should be more efficient!
+            (GameState::Undecided, open) => { interesting_hashes = open; },
         }
         // 2. try to find a solution from game simulation
         match Worker::game_simulation(moves_ahead, game.clone(), p) {
@@ -475,7 +477,7 @@ impl Worker {
             GameState::Locked => panic!("unexpected state at this state"),
             GameState::Undecided => {
         // 3. claim interest for the remaining undecided games two moves ahead
-                Worker::claim_interests(interest, game.clone(), p);
+                Worker::claim_interests(interest, interesting_hashes, p);
                 return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
             },
         }
