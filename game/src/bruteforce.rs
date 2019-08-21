@@ -67,6 +67,7 @@ fn game_from_hash(hash:GameHash) -> ConnectFour {
 pub struct GameRecord {
     state: GameState,
 }
+#[derive(Debug)]
 pub enum GameState {
     Locked,
     Decided(Score, Option<Column>),
@@ -185,7 +186,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
             _game_evaluation: bool
         ) -> (Option<Rc<dyn Move<Column>>>, Option<Score>) {
         
-        let (conductor, receiver) = Conductor::init_conductor_and_band(moves_ahead, p);
+        let (conductor, receiver) = Conductor::init_conductor_and_band(moves_ahead, p, self.nworkers);
         conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
         
@@ -203,7 +204,8 @@ impl BruteForceStrategy {
     fn await_verdict(&self,
             receiver:Receiver<Verdict>
         ) -> (Column, Score) {
-        (Column::One, Score::Undecided(0.0))
+        let verdict = receiver.recv().unwrap();
+        (verdict.column.unwrap(), verdict.score)
     }
 }
 
@@ -223,7 +225,7 @@ pub struct Conductor {
 }
 
 impl Conductor {
-    fn init_conductor_and_band (moves_ahead:i32, p:&Player) -> (Self, Receiver<Verdict>) {
+    fn init_conductor_and_band (moves_ahead:i32, p:&Player, nworkers:usize) -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest_sender = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
@@ -233,10 +235,10 @@ impl Conductor {
 
 thread::spawn(move|| {
     let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
-    let mut workers:Vec<Worker> = vec![0; 4]
-        .into_iter()
-        .map(|i| Worker::spawn_worker(i, itx.clone(), moves_ahead, game_store.clone()))
-        .collect();
+    let mut workers:Vec<Worker> = Vec::new();
+    for i in 0..nworkers {
+        workers.push(Worker::spawn_worker(i, itx.clone(), moves_ahead, game_store.clone()));
+    }
 
     loop {
         if let Ok(interest) = interests.recv() {
@@ -273,7 +275,7 @@ thread::spawn(move|| {
                                         break;
                                     }
                                 },
-                                GameState::Locked => panic!("shouldn't happen!?"),
+                                GameState::Locked => println!("{} must have been picked up again already", &finished),
                                 GameState::Undecided => (),
                             }
                         },
@@ -505,16 +507,19 @@ impl Worker {
             hash:GameHash) -> bool {
         let mut gs = game_store.lock().unwrap();
         if let Some(record) = (*gs).get(&hash) {
-            match record.state {
-                GameState::Undecided => {(*gs).insert(hash, GameRecord {
-                    state: GameState::Locked,
-                }); },
-                _ => return false,
+            match &record.state {
+                GameState::Undecided => {
+                    (*gs).insert(hash, GameRecord { state: GameState::Locked, });
+                    println!("locked {}", hash);
+                },
+                s => {
+                    println!("cannot lock {}, it's {:?}", hash, s);
+                    return false;
+                },
             }
         } else {
-            (*gs).insert(hash, GameRecord { 
-                state: GameState::Locked,
-            });
+            println!("new record {}", hash);
+            (*gs).insert(hash, GameRecord { state: GameState::Locked, });
         }
         true
     }
@@ -523,9 +528,20 @@ impl Worker {
             hash:GameHash,
             state:GameState) {
         let mut gs = game_store.lock().unwrap();
-        (*gs).insert(hash, GameRecord { 
-            state: state,
-        });
+        match state {
+            GameState::Locked => panic!("must unlock {}", hash),
+            _ => (),
+        }
+        if let Some(record) = (*gs).get(&hash) {
+            match record.state {
+                GameState::Locked => {
+                    (*gs).insert(hash, GameRecord{ state: state, });
+                },
+                _ => panic!("{} should be locked!", hash),
+            }
+        } else {
+            panic!("{} should have a record!", hash);
+        }
     }
 
     fn spawn_worker(
@@ -535,17 +551,31 @@ impl Worker {
             game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>) -> Worker {
         let (tx,jobs) = channel::<(GameHash,Player)>();
         let moves_ahead = moves_ahead;
+// debug
+println!("hello {}", wid);
+//
 
 thread::spawn(move|| {
     loop {
         match jobs.recv() {
             Err(e) => { println!("Job receive error - {}", e); }
-            Ok((-1,_)) => { break; },
+            Ok((-1,_)) => {
+// debug
+println!("bye-bye {}", wid);
+//
+                break;
+            },
             Ok((hash,p)) => {
+// debug
+println!("job for {}: {}", wid, hash);
+//
                 Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p);
                 interest.send(Interest{
                     interested: Some(hash), interesting: None, worker_id: Some(wid),
                 }).unwrap();
+// debug
+println!("done by {}: {}", wid, hash);
+//
             },
         }
     }
