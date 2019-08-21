@@ -244,7 +244,7 @@ thread::spawn(move|| {
         if let Ok(interest) = interests.recv() {
             match (interest.interesting, interest.interested) {
                 // worker has finished job
-                (None, Some(interested))=> {
+                (None, Some(interested)) => {
                     // note changed job pendencies
                     let worker_id = interest.worker_id.unwrap();
                     workers.get_mut(worker_id).unwrap().pending_jobs -= 1;
@@ -256,15 +256,15 @@ thread::spawn(move|| {
                         Some(record) => {
                             match &record.state {
                                 GameState::Decided(score, column) => {
-                                    if let Some(interested) = interest_store.remove(&finished) {
-                                        for jobhash in interested.into_iter() {
+                                    if let Some(parents) = interest_store.remove(&finished) {
+                                        for jobhash in parents.into_iter() {
                                             let wid = (&workers).into_iter()
                                                 .min_by_key(|w| w.pending_jobs).unwrap().id;
                                             let worker = workers.get_mut(wid).unwrap();
                                             worker.job_box.send((jobhash, player.clone())).unwrap();
                                             worker.pending_jobs += 1;
                                         }
-                                    } else {
+                                    } else if finished == principal {
                                         for w in workers {
                                             w.job_box.send((-1, Player::Black)).unwrap();
                                         }
@@ -275,7 +275,10 @@ thread::spawn(move|| {
                                         break;
                                     }
                                 },
-                                GameState::Locked => println!("{} must have been picked up again already", &finished),
+                                GameState::Locked => 
+// debug
+println!("{} must have been picked up again already", &finished),
+//
                                 GameState::Undecided => (),
                             }
                         },
@@ -293,7 +296,13 @@ thread::spawn(move|| {
                     }
                     let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
                     let worker = workers.get_mut(wid).unwrap();
-                    worker.job_box.send((interesting, player.clone())).unwrap();
+                    match worker.job_box.send((interesting, player.clone())) {
+                        Err(e) => 
+//debug
+println!("cannot submit new job to {} ({}). worker has quit?", worker.id, e),
+//
+                        Ok(_) => (),
+                    };
                     worker.pending_jobs += 1;
                 },
                 (None, None) => panic!("doesn't make sense"),
@@ -462,7 +471,13 @@ impl Worker {
                 worker_id: None,
             }
         }).map(|im| {
-            interest_sender.send(im).unwrap();
+            match interest_sender.send(im) {
+                Err(e) => 
+// debug
+println!("cannot send interest ({}), conductor has left the building?", e),
+//                  
+                Ok(_) => (),
+            }
         }).for_each(drop);
     }
 
@@ -489,7 +504,8 @@ impl Worker {
             //       should be more efficient!
             (GameState::Undecided, open) => { interesting_hashes = open; },
         }
-        // 2. try to find a solution from game simulation
+        // 2. try to find a solution from game simulation - if not already tried!
+        // TODO: skip simulation if already tried
         match Worker::game_simulation(moves_ahead, game.clone(), p) {
             GameState::Decided(verdict, mv) => { 
                 return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
@@ -510,15 +526,21 @@ impl Worker {
             match &record.state {
                 GameState::Undecided => {
                     (*gs).insert(hash, GameRecord { state: GameState::Locked, });
-                    println!("locked {}", hash);
+// debug
+println!("locked {}", hash);
+//
                 },
                 s => {
-                    println!("cannot lock {}, it's {:?}", hash, s);
+// debug
+println!("cannot lock {}, it's {:?}", hash, s);
+//
                     return false;
                 },
             }
         } else {
-            println!("new record {}", hash);
+// debug
+println!("new record {}", hash);
+//
             (*gs).insert(hash, GameRecord { state: GameState::Locked, });
         }
         true
@@ -570,9 +592,16 @@ println!("bye-bye {}", wid);
 println!("job for {}: {}", wid, hash);
 //
                 Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p);
-                interest.send(Interest{
+                match interest.send(Interest{
                     interested: Some(hash), interesting: None, worker_id: Some(wid),
-                }).unwrap();
+                }) {
+                    Err(e) => 
+//debug
+println!("cannot declare job done ({}). conductor has left the building?", e),
+//
+                    Ok(_) => (),
+                };
+
 // debug
 println!("done by {}: {}", wid, hash);
 //
