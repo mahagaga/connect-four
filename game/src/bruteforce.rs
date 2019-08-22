@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
 use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread;
+use std::time::Duration;
 
 
 //#################################################################################################
@@ -189,8 +190,10 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
         let (conductor, receiver) = Conductor::init_conductor_and_band(principal, moves_ahead, p, self.nworkers);
         conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
-        
-        (Some(Rc::new(ConnectFourMove{ data:column })), Some(score))
+        match column {
+            None =>  (None, Some(score)),
+            Some(column) => (Some(Rc::new(ConnectFourMove{ data:column })), Some(score)),
+        }
     }
 }
 
@@ -203,9 +206,15 @@ impl BruteForceStrategy {
 
     fn await_verdict(&self,
             receiver:Receiver<Verdict>
-        ) -> (Column, Score) {
-        let verdict = receiver.recv().unwrap();
-        (verdict.column.unwrap(), verdict.score)
+        ) -> (Option<Column>, Score) {
+        loop {
+            if let Ok(verdict) = receiver.recv() {
+                return (verdict.column, verdict.score);
+            } else {
+                println!("await verdict");
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
     }
 }
 
@@ -225,6 +234,20 @@ pub struct Conductor {
 }
 
 impl Conductor {
+    fn dump_store(
+        game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>,
+        principal:GameHash
+    ) {
+print!("+-");
+        let gs = game_store.lock().unwrap();
+print!("-+");
+
+        // TODO: full implementation
+        if let Some(record) = (*gs).get(&principal) {
+             println!("game {} state {:?}", principal, record.state);
+        }
+    }
+
     fn init_conductor_and_band (principal:GameHash, moves_ahead:i32, p:&Player, nworkers:usize) -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest_sender = itx.clone();
@@ -252,8 +275,10 @@ thread::spawn(move|| {
 
                     // submit new jobs if this game is decided now
                     let finished = interested;
-                    let gs = game_store.lock().unwrap();
-                    match (*gs).get(&finished) {
+print!("+-");
+                    let gst = game_store.lock().unwrap();
+print!("-+"); 
+                    match (*gst).get(&finished) {
                         Some(record) => {
                             match &record.state {
                                 GameState::Decided(score, column) => {
@@ -262,13 +287,34 @@ thread::spawn(move|| {
                                             let wid = (&workers).into_iter()
                                                 .min_by_key(|w| w.pending_jobs).unwrap().id;
                                             let worker = workers.get_mut(wid).unwrap();
-                                            worker.job_box.send((jobhash, player.clone())).unwrap();
+                                            // TODO: rearrange this part. It's a bad idea to do loops
+                                            //       while the game_store is locked
+                                            loop {
+                                                match worker.job_box.send((jobhash, player.clone())) {
+                                                    Ok(_) => break,
+                                                    Err(_) => {
+                                                        println!("worker? {}", wid);
+                                                        thread::sleep(Duration::from_millis(1));
+                                                    },
+                                                }
+                                            }
                                             worker.pending_jobs += 1;
                                         }
                                     } else if finished == principal {
                                         for w in workers {
-                                            w.job_box.send((-1, Player::Black)).unwrap();
+                                            // TODO: rearrange this part. It's a bad idea to do loops
+                                            //       while the game_store is locked
+                                            loop {
+                                                match w.job_box.send((-1, Player::Black)) {
+                                                    Ok(_) => break,
+                                                    Err(_) => {
+                                                        println!("anonymous worker?");
+                                                        thread::sleep(Duration::from_millis(1));
+                                                    },
+                                                }
+                                            }
                                         }
+                                        Conductor::dump_store(game_store.clone(), principal);
                                         final_verdict.send(Verdict{
                                             score: score.clone(),
                                             column: column.clone(),
@@ -380,7 +426,9 @@ impl Worker {
                                         Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
                                         Score::Undecided(_) => { // unclear from the bord: check game store
                                             let hash = hash_from_game(g.clone());
+print!("+-");
                                             let gs = game_store.lock().unwrap();
+print!("-+");
                                             if let Some(record) = (*gs).get(&hash) {
                                                 match &record.state {
                                                     GameState::Decided(record_score,_) => match record_score {
@@ -488,41 +536,47 @@ println!("cannot send interest ({}), conductor has left the building?", e),
             interest:&Sender<Interest>,
             hash:GameHash,
             p:&Player) {
-        // return if game is locked or decided
-        if !Worker::lock_hash(&game_store, hash) {
-            return ();
-        }
+        match Worker::lock_hash(&game_store, hash) {
+            // 0. quit job if game is locked or decided
+            Err(_) => return (),
+            Ok(new) => { // new game, never simulated
+                let game = Rc::new(RefCell::new(game_from_hash(hash)));
 
-        let game = Rc::new(RefCell::new(game_from_hash(hash)));
-        let interesting_hashes;
-        // 1. try to find a solution from the game store two moves ahead
-        match Worker::two_moves_ahead_inquiry(&game_store, game.clone(), p) {
-            (GameState::Decided(verdict, mv),_) => { 
-                return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
-            },
-            (GameState::Locked,_) => panic!("unexpected state at this state"),
-            // TODO: if necessary, defer the interesting hashes from the game simulation and not the two moves inquiry
-            //       should be more efficient!
-            (GameState::Undecided, open) => { interesting_hashes = open; },
-        }
-        // 2. try to find a solution from game simulation - if not already tried!
-        // TODO: skip simulation if already tried
-        match Worker::game_simulation(moves_ahead, game.clone(), p) {
-            GameState::Decided(verdict, mv) => { 
-                return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
-            },
-            GameState::Locked => panic!("unexpected state at this state"),
-            GameState::Undecided => {
-        // 3. claim interest for the remaining undecided games two moves ahead
-                Worker::claim_interests(interest, interesting_hashes, hash);
-                return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
+                if new { // new game, never simulated
+            // 1. try to find a solution from game simulation - if not already tried!
+                // TODO: skip simulation if already tried
+                    match Worker::game_simulation(moves_ahead, game.clone(), p) {
+                        GameState::Decided(verdict, mv) => { 
+                            return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+                        },
+                        GameState::Locked => panic!("unexpected state at this state"),
+                        GameState::Undecided => (),
+                    }
+                }
+
+            // 2. try to find a solution from the game store two moves ahead
+                match Worker::two_moves_ahead_inquiry(&game_store, game.clone(), p) {
+                    (GameState::Decided(verdict, mv),_) => { 
+                        return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+                    },
+                    (GameState::Locked,_) => panic!("unexpected state at this state"),
+                    (GameState::Undecided, interesting_hashes) => {
+            // 3. claim interest for the remaining undecided games two moves ahead
+                        // TODO: if necessary, defer the interesting hashes from the game simulation and not the two moves inquiry
+                        //       should be more efficient!
+                        Worker::claim_interests(interest, interesting_hashes, hash);
+                        return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
+                    },
+                }
             },
         }
     }
     fn lock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
             hash:GameHash) -> Result<bool,bool> {
+print!("+-");
         let mut gs = game_store.lock().unwrap();
+print!("-+");
         if let Some(record) = (*gs).get(&hash) {
             match &record.state {
                 GameState::Undecided => {
@@ -557,7 +611,9 @@ println!("new record {}", hash);
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
             hash:GameHash,
             state:GameState) {
+print!("+-");
         let mut gs = game_store.lock().unwrap();
+print!("-+");
         match state {
             GameState::Locked => panic!("must unlock {}", hash),
             _ => (),
