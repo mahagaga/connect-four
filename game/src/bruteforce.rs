@@ -488,7 +488,7 @@ print!(".+");
             let (score, col) = draw_moves.first().unwrap();
             return (GameState::Decided(score.clone(), Some(col.clone())), vec![]);
         } else if !doomed_moves.is_empty() { // all is lost
-            let (score, col) = draw_moves.first().unwrap();
+            let (score, col) = doomed_moves.first().unwrap();
             return (GameState::Decided(score.clone(), Some(col.clone())), vec![]);
         }
         (GameState::Undecided, vec![])
