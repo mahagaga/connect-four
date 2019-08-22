@@ -185,8 +185,8 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
             // because it we have our own find_best_move implementation
             _game_evaluation: bool
         ) -> (Option<Rc<dyn Move<Column>>>, Option<Score>) {
-        
-        let (conductor, receiver) = Conductor::init_conductor_and_band(moves_ahead, p, self.nworkers);
+        let principal = hash_from_game(g.clone());
+        let (conductor, receiver) = Conductor::init_conductor_and_band(principal, moves_ahead, p, self.nworkers);
         conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
         
@@ -225,13 +225,14 @@ pub struct Conductor {
 }
 
 impl Conductor {
-    fn init_conductor_and_band (moves_ahead:i32, p:&Player, nworkers:usize) -> (Self, Receiver<Verdict>) {
+    fn init_conductor_and_band (principal:GameHash, moves_ahead:i32, p:&Player, nworkers:usize) -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest_sender = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
         
         let game_store = Arc::new(Mutex::new(HashMap::<GameHash,GameRecord>::new()));
         let player = p.clone();
+        let principal:GameHash = principal;
 
 thread::spawn(move|| {
     let mut interest_store:HashMap<GameHash,Vec<GameHash>> = HashMap::new();
@@ -520,7 +521,7 @@ println!("cannot send interest ({}), conductor has left the building?", e),
     }
     fn lock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
-            hash:GameHash) -> bool {
+            hash:GameHash) -> Result<bool,bool> {
         let mut gs = game_store.lock().unwrap();
         if let Some(record) = (*gs).get(&hash) {
             match &record.state {
@@ -529,12 +530,19 @@ println!("cannot send interest ({}), conductor has left the building?", e),
 // debug
 println!("locked {}", hash);
 //
+                    return Ok(false);
                 },
-                s => {
+                GameState::Locked => {
 // debug
-println!("cannot lock {}, it's {:?}", hash, s);
+println!("cannot lock {}, it's locked", hash);
 //
-                    return false;
+                    return Err(true);
+                },
+                GameState::Decided(score, mv) => {
+// debug
+println!("cannot lock {}, it's {:?} with {:?}", hash, score, mv);
+//
+                    return Err(false);
                 },
             }
         } else {
@@ -542,8 +550,8 @@ println!("cannot lock {}, it's {:?}", hash, s);
 println!("new record {}", hash);
 //
             (*gs).insert(hash, GameRecord { state: GameState::Locked, });
+            return Ok(true);
         }
-        true
     }
     fn unlock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
