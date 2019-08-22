@@ -238,9 +238,9 @@ impl Conductor {
         game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>,
         principal:GameHash
     ) {
-print!("+-");
+print!("+_");
         let gs = game_store.lock().unwrap();
-print!("-+");
+print!("_+");
 
         // TODO: full implementation
         if let Some(record) = (*gs).get(&principal) {
@@ -275,61 +275,63 @@ thread::spawn(move|| {
 
                     // submit new jobs if this game is decided now
                     let finished = interested;
-print!("+-");
-                    let gst = game_store.lock().unwrap();
-print!("-+"); 
-                    match (*gst).get(&finished) {
-                        Some(record) => {
-                            match &record.state {
-                                GameState::Decided(score, column) => {
-                                    if let Some(parents) = interest_store.remove(&finished) {
-                                        for jobhash in parents.into_iter() {
-                                            let wid = (&workers).into_iter()
-                                                .min_by_key(|w| w.pending_jobs).unwrap().id;
-                                            let worker = workers.get_mut(wid).unwrap();
-                                            // TODO: rearrange this part. It's a bad idea to do loops
-                                            //       while the game_store is locked
-                                            loop {
-                                                match worker.job_box.send((jobhash, player.clone())) {
-                                                    Ok(_) => break,
-                                                    Err(_) => {
-                                                        println!("worker? {}", wid);
-                                                        thread::sleep(Duration::from_millis(1));
-                                                    },
-                                                }
-                                            }
-                                            worker.pending_jobs += 1;
-                                        }
-                                    } else if finished == principal {
-                                        for w in workers {
-                                            // TODO: rearrange this part. It's a bad idea to do loops
-                                            //       while the game_store is locked
-                                            loop {
-                                                match w.job_box.send((-1, Player::Black)) {
-                                                    Ok(_) => break,
-                                                    Err(_) => {
-                                                        println!("anonymous worker?");
-                                                        thread::sleep(Duration::from_millis(1));
-                                                    },
-                                                }
-                                            }
-                                        }
-                                        Conductor::dump_store(game_store.clone(), principal);
-                                        final_verdict.send(Verdict{
-                                            score: score.clone(),
-                                            column: column.clone(),
-                                        }).unwrap();
-                                        break;
-                                    }
-                                },
-                                GameState::Locked => 
+                    let record;
+                    {
+print!("+:");
+                        let gst = game_store.lock().unwrap();
+                        record = match (*gst).get(&finished) {
+                            Some(x) => {
+                                match &x.state {
+                                    GameState::Decided(score, column) => Some((score.clone(), column.clone())),
+                                    GameState::Locked => {
 // debug
-println!("{} must have been picked up again already", &finished),
+println!("{} must have been picked up again already", &finished);
 //
-                                GameState::Undecided => (),
+                                        None
+                                    }
+                                    GameState::Undecided => None,
+                                }
+                            },
+                            None => panic!("game should have a record!"),
+                        };
+print!(":+"); 
+                    }
+                    if let Some((score, column)) = record {
+                        if let Some(parents) = interest_store.remove(&finished) {
+                            for jobhash in parents.into_iter() {
+                                let wid = (&workers).into_iter()
+                                    .min_by_key(|w| w.pending_jobs).unwrap().id;
+                                let worker = workers.get_mut(wid).unwrap();
+                                loop {
+                                    match worker.job_box.send((jobhash, player.clone())) {
+                                        Ok(_) => break,
+                                        Err(_) => {
+                                            println!("worker? {}", wid);
+                                            thread::sleep(Duration::from_millis(1));
+                                        },
+                                    }
+                                }
+                                worker.pending_jobs += 1;
                             }
-                        },
-                        None => panic!("game should have a record!"),
+                        } else if finished == principal {
+                            for w in workers {
+                                loop {
+                                    match w.job_box.send((-1, Player::Black)) {
+                                        Ok(_) => break,
+                                        Err(_) => {
+                                            println!("anonymous worker?");
+                                            thread::sleep(Duration::from_millis(1));
+                                        },
+                                    }
+                                }
+                            }
+                            Conductor::dump_store(game_store.clone(), principal);
+                            final_verdict.send(Verdict{
+                                score: score.clone(),
+                                column: column.clone(),
+                            }).unwrap();
+                            break;
+                        }
                     }
                 },
                 // claimed interest
@@ -426,9 +428,9 @@ impl Worker {
                                         Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
                                         Score::Undecided(_) => { // unclear from the bord: check game store
                                             let hash = hash_from_game(g.clone());
-print!("+-");
+print!("+.");
                                             let gs = game_store.lock().unwrap();
-print!("-+");
+print!(".+");
                                             if let Some(record) = (*gs).get(&hash) {
                                                 match &record.state {
                                                     GameState::Decided(record_score,_) => match record_score {
