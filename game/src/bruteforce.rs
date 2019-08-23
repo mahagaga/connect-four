@@ -238,9 +238,9 @@ impl Conductor {
         game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>,
         principal:GameHash
     ) {
-print!("+_");
+//print!("+_");
         let gs = game_store.lock().unwrap();
-print!("_+");
+//print!("_+");
 
         // TODO: full implementation
         if let Some(record) = (*gs).get(&principal) {
@@ -277,7 +277,7 @@ thread::spawn(move|| {
                     let finished = interested;
                     let record;
                     {
-print!("+:");
+//print!("+:");
                         let gst = game_store.lock().unwrap();
                         record = match (*gst).get(&finished) {
                             Some(x) => {
@@ -285,7 +285,7 @@ print!("+:");
                                     GameState::Decided(score, column) => Some((score.clone(), column.clone())),
                                     GameState::Locked => {
 // debug
-println!("{} must have been picked up again already", &finished);
+//println!("{} must have been picked up again already", &finished);
 //
                                         None
                                     }
@@ -294,7 +294,7 @@ println!("{} must have been picked up again already", &finished);
                             },
                             None => panic!("game should have a record!"),
                         };
-print!(":+"); 
+//print!(":+"); 
                     }
                     if let Some((score, column)) = record {
                         if let Some(parents) = interest_store.remove(&finished) {
@@ -346,9 +346,9 @@ print!(":+");
                     let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
                     let worker = workers.get_mut(wid).unwrap();
                     match worker.job_box.send((interesting, player.clone())) {
-                        Err(e) => 
+                        Err(_e) => (),
 //debug
-println!("cannot submit new job to {} ({}). worker has quit?", worker.id, e),
+//println!("cannot submit new job to {} ({}). worker has quit?", worker.id, _e),
 //
                         Ok(_) => (),
                     };
@@ -428,9 +428,9 @@ impl Worker {
                                         Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
                                         Score::Undecided(_) => { // unclear from the bord: check game store
                                             let hash = hash_from_game(g.clone());
-print!("+.");
+//print!("+.");
                                             let gs = game_store.lock().unwrap();
-print!(".+");
+//print!(".+");
                                             if let Some(record) = (*gs).get(&hash) {
                                                 match &record.state {
                                                     GameState::Decided(record_score,_) => match record_score {
@@ -500,6 +500,9 @@ print!(".+");
         p:&Player
     ) -> GameState {
         let cfs = ConnectFourStrategy::default();
+// debug
+//println!("{}\n{}\n{}", g.borrow().display(), moves_ahead, p);
+//
         match cfs.find_best_move(g,p,moves_ahead,true) {
             (Some(mv), Some(score)) => match score {
                 Score::Undecided(_) => GameState::Undecided,
@@ -523,10 +526,10 @@ print!(".+");
             }
         }).map(|im| {
             match interest_sender.send(im) {
-                Err(e) => 
+                Err(_e) => (),
 // debug
-println!("cannot send interest ({}), conductor has left the building?", e),
-//                  
+//println!("cannot send interest ({}), conductor has left the building?", _e),
+//
                 Ok(_) => (),
             }
         }).for_each(drop);
@@ -576,34 +579,34 @@ println!("cannot send interest ({}), conductor has left the building?", e),
     fn lock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
             hash:GameHash) -> Result<bool,bool> {
-print!("+-");
+//print!("+-");
         let mut gs = game_store.lock().unwrap();
-print!("-+");
+//print!("-+");
         if let Some(record) = (*gs).get(&hash) {
             match &record.state {
                 GameState::Undecided => {
                     (*gs).insert(hash, GameRecord { state: GameState::Locked, });
 // debug
-println!("locked {}", hash);
+//println!("locked {}", hash);
 //
                     return Ok(false);
                 },
                 GameState::Locked => {
 // debug
-println!("cannot lock {}, it's locked", hash);
+//println!("cannot lock {}, it's locked", hash);
 //
                     return Err(true);
                 },
-                GameState::Decided(score, mv) => {
+                GameState::Decided(_score, _mv) => {
 // debug
-println!("cannot lock {}, it's {:?} with {:?}", hash, score, mv);
+//println!("cannot lock {}, it's {:?} with {:?}", hash, score, mv);
 //
                     return Err(false);
                 },
             }
         } else {
 // debug
-println!("new record {}", hash);
+//println!("new record {}", hash);
 //
             (*gs).insert(hash, GameRecord { state: GameState::Locked, });
             return Ok(true);
@@ -613,9 +616,9 @@ println!("new record {}", hash);
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
             hash:GameHash,
             state:GameState) {
-print!("+-");
+//print!("+-");
         let mut gs = game_store.lock().unwrap();
-print!("-+");
+//print!("-+");
         match state {
             GameState::Locked => panic!("must unlock {}", hash),
             _ => (),
@@ -640,7 +643,7 @@ print!("-+");
         let (tx,jobs) = channel::<(GameHash,Player)>();
         let moves_ahead = moves_ahead;
 // debug
-println!("hello {}", wid);
+//println!("hello {}", wid);
 //
 
 thread::spawn(move|| {
@@ -649,27 +652,27 @@ thread::spawn(move|| {
             Err(e) => { println!("Job receive error - {}", e); }
             Ok((-1,_)) => {
 // debug
-println!("bye-bye {}", wid);
+//println!("bye-bye {}", wid);
 //
                 break;
             },
             Ok((hash,p)) => {
 // debug
-println!("job for {}: {}", wid, hash);
+//println!("job for {}: {}", wid, hash);
 //
                 Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p);
                 match interest.send(Interest{
                     interested: Some(hash), interesting: None, worker_id: Some(wid),
                 }) {
-                    Err(e) => 
+                    Err(_e) => (),
 //debug
-println!("cannot declare job done ({}). conductor has left the building?", e),
+//println!("cannot declare job done ({}). conductor has left the building?", _e),
 //
                     Ok(_) => (),
                 };
 
 // debug
-println!("done by {}: {}", wid, hash);
+//println!("done by {}: {}", wid, hash);
 //
             },
         }
