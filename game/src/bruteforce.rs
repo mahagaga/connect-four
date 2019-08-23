@@ -338,7 +338,11 @@ thread::spawn(move|| {
                 (Some(interesting), parent) => {
                     if let Some(interested) = parent {
                         if let Some(record) = interest_store.get_mut(&interesting) {
-                            record.push(interested);
+                            // here, a HashSet would certainly be useful instead of a Vector
+                            // but since memory is the likely bottleneck AND it's assumed that vectors are smaller...
+                            if record.into_iter().all(|h| {*h!=interested}) {
+                                record.push(interested);
+                            }
                         } else {
                             interest_store.insert(interesting, vec![interested]);
                         }
