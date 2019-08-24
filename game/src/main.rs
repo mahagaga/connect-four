@@ -7,6 +7,7 @@ use game::generic::*;
 use std::time::{Instant};
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::env;
 
 fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player) -> u64 {
     let strategy = BruteForceStrategy::new(nworker);
@@ -27,19 +28,18 @@ fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player
 
 }
 
-fn main() {
-    let nworker = 3;
-    let toplimit = 6;
-    let player = Player::Black;
-    let games = [/* ConnectFour::new(), replicate_game("------
+fn default_int(a:Option<&String>, default:usize) -> usize {
+    match a {
+        Some(n) => match n.parse::<usize>() {
+            Ok(u) => u,
+            Err(_) => panic!("{} is not a number.", n),
+        },
+        None => default,
+    }
+}
 
-
-
-
-
-
-
-------"), */ replicate_game("------
+fn read_game_from_file(a:Option<&String>) -> ConnectFour {
+    let default = "------
 
 x
 
@@ -47,7 +47,38 @@ xo
 
 o
 
-------"), ];
+------";
+    let plan = match a {
+        Some(path) => match std::fs::read_to_string(path) {
+            Err(_) => panic!("cannot read file {}", path),
+            Ok(string) => string,
+        },
+        None =>  {
+            println!("play default game");
+            String::from(default)
+        },
+    };
+    replicate_game(&plan[..])
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let nworker = default_int(args.get(3), 3);
+    let toplimit = default_int(args.get(4), 4) as i32;
+    let player = match &args.get(2) {
+        Some(p) =>  {
+            match &p[..] {
+                "black" => Player::Black,
+                "white" => Player::White,
+                _ => panic!("{} neither black nor white. you are black then.", p),
+            }
+        },
+        None => Player::Black,
+    };
+    
+    let game = read_game_from_file(args.get(1));
+    let games = [game,];
     let _timep = games.iter()
     .map(|game| {
         time_pondering(game, nworker, toplimit, &player)
