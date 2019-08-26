@@ -211,8 +211,8 @@ impl BruteForceStrategy {
             if let Ok(verdict) = receiver.recv() {
                 return (verdict.column, verdict.score);
             } else {
-                println!("await verdict");
-                thread::sleep(Duration::from_millis(1));
+               // println!("await verdict");
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
@@ -236,7 +236,8 @@ pub struct Conductor {
 impl Conductor {
     fn dump_store(
         game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>,
-        principal:GameHash
+        principal:GameHash,
+        p:&Player,
     ) {
 //print!("+_");
         let gs = game_store.lock().unwrap();
@@ -245,6 +246,64 @@ impl Conductor {
         // TODO: full implementation
         if let Some(record) = (*gs).get(&principal) {
              println!("game {} state {:?}", principal, record.state);
+        }
+
+        // print the next couple of moves
+
+        let g = Rc::new(RefCell::new(game_from_hash(principal)));
+        println!("{}", g.borrow().display());
+        
+        let options = g.borrow().possible_moves(p);
+        if options.is_empty() { // no possible moves left: stalemate
+            return ();
+        }
+
+        for mv in options.into_iter() {
+            let score_result = g.borrow_mut().make_move(p, Rc::clone(&mv));
+            match score_result {
+                Ok(score) => match score {
+                    // found a winning move: immediate return
+                    Score::Won(in_n) => println!("immediate winner in {}: {:?}", in_n, mv.data()),
+                    Score::Remis(in_n) => println!("immediate draw in {}: {:?}", in_n, mv.data()),
+                    Score::Lost(in_n) => println!("immediate loser in {}: {:?}", in_n, mv.data()),
+
+                    // found an undecided move, winning is still an option: let opponent make a move
+                    Score::Undecided(_) => {
+                        println!("option {:?}", mv.data());
+                        let anti_options = g.borrow().possible_moves(p.opponent());
+
+                        for anti_mv in anti_options.into_iter() {
+                            let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
+                            match anti_score {
+                                Ok(score) => match score {
+                                    Score::Won(in_n) => println!("- consequent winner in {}: {:?}", in_n, anti_mv.data()),
+                                    Score::Lost(in_n) => println!("- consequent loser in {}: {:?}", in_n, anti_mv.data()),
+                                    Score::Remis(in_n) => println!("- consequent draw in {}: {:?}", in_n, anti_mv.data()),
+                                    Score::Undecided(_) => { // unclear from the bord: check game store
+                                        let hash = hash_from_game(g.clone());
+                                        if let Some(record) = (*gs).get(&hash) {
+                                            match &record.state {
+                                                GameState::Decided(record_score,_) => match record_score {
+                                                    Score::Lost(in_n) => println!("- stored loser in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
+                                                    Score::Remis(in_n) => println!("- stored draw in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
+                                                    Score::Won(in_n) => println!("- stored winner in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
+                                                    Score::Undecided(_) => println!("- STORED DECIDED UNDECIDED (?) {:?} -> {}", anti_mv.data(), hash),
+                                                }
+                                                state => println!("- stored undecided ({:?}) {:?} -> {}", state, anti_mv.data(), hash),
+                                            }
+                                        } else { println!("- unrecorded {:?} -> {}", anti_mv.data(), hash); }
+                                    },
+                                },
+                                Err(_) => panic!("unexpected error in anti move"),
+                            }
+                            g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                        }
+                                        
+                    },
+                },
+                Err(_) => panic!("unexpected error in move"),
+            }
+            g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
         }
     }
 
@@ -325,7 +384,7 @@ thread::spawn(move|| {
                                     }
                                 }
                             }
-                            Conductor::dump_store(game_store.clone(), principal);
+                            Conductor::dump_store(game_store.clone(), principal, &player);
                             final_verdict.send(Verdict{
                                 score: score.clone(),
                                 column: column.clone(),

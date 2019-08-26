@@ -28,6 +28,29 @@ fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player
 
 }
 
+fn game_from_hash(hash:i128) -> ConnectFour {
+    let mut game = ConnectFour::new();
+    let mut h = hash;
+    let base:i128 = 4;
+    for ci in 0..ConnectFour::width() {
+        let col = Column::from_usize(ci);
+        let mut cr = h % base.pow(ConnectFour::height() as u32);
+        for _ri in 0..ConnectFour::height() {
+            let stone = cr % base;
+            match stone {
+                1 => { game.drop_stone(&Player::White, col.clone()).unwrap(); },
+                2 => { game.drop_stone(&Player::Black, col.clone()).unwrap(); },
+                3 => { game.drop_stone(&Player::Gray, col.clone()).unwrap(); },
+                0 => break,
+                _ => (),
+            }
+            cr = cr / base;
+        }
+        h = h / base.pow(ConnectFour::height() as u32);
+    }
+    game
+}
+
 fn default_int(a:Option<&String>, default:usize) -> usize {
     match a {
         Some(n) => match n.parse::<usize>() {
@@ -50,7 +73,9 @@ o
 ------";
     let plan = match a {
         Some(path) => match std::fs::read_to_string(path) {
-            Err(_) => panic!("cannot read file {}", path),
+            Err(_) =>  {
+                return game_from_hash(default_int(a, 0) as i128);
+            },
             Ok(string) => string,
         },
         None =>  {
@@ -106,7 +131,8 @@ fn replicate_game(plan: &str) -> ConnectFour {
                     ).unwrap(); 
                 }
             },
-            _ => assert_eq!(line, "------"),
+            c if (c==0 || c ==8) => assert_eq!(line, "------"),
+            _ => (),
         }
     }
     g
