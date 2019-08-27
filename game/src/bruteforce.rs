@@ -477,6 +477,7 @@ impl Worker {
                             let mut anti_draw_moves = Vec::<(Score,Column)>::new();
                             let mut anti_doomed_moves = Vec::<(Score,Column)>::new();
                             let mut anti_open_moves = Vec::<GameHash>::new();
+                            let mut anti_won = false;
 
                             for anti_mv in anti_options.into_iter() {
                                 let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
@@ -485,6 +486,7 @@ impl Worker {
                                         Score::Won(in_n) => { // opponent has a winning move: losing
                                             doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
                                             g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                            anti_won = true;
                                             break;
                                         },
                                         Score::Lost(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
@@ -498,8 +500,9 @@ impl Worker {
                                                 match &record.state {
                                                     GameState::Decided(record_score,_) => match record_score {
                                                         Score::Lost(in_n) => { // opponent can reach a lost game: losing
-                                                            doomed_moves.push((Score::Lost(in_n+1), mv.data().clone()));
+                                                            doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
                                                             g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                                            anti_won = true;
                                                             break;
                                                         },
                                                         Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
@@ -516,8 +519,9 @@ impl Worker {
                                 g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
                             }
 
-                            // if opponent has a winning move, the loop was broken and the triage below is not executed
-                            if !anti_open_moves.is_empty() { // best opponent move is undecided
+                            if anti_won {
+                                // doomed_moves.push(anti_won_move);
+                            } else if !anti_open_moves.is_empty() { // best opponent move is undecided
                                 for interesting_hash in anti_open_moves.into_iter() {
                                     open_moves.push(interesting_hash);
                                 }
