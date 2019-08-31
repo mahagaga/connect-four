@@ -1,5 +1,5 @@
 # connect-four
-The goal is to have a decent Connect Four player implemented in Rust.
+Aim of this project is a Rust implementation of a Connect Four player.
 
 ### Crates
 There are two crates
@@ -10,7 +10,7 @@ There are two crates
 
 ### Installation instructions
 
-* clone this reopository and connect-four-js, forked from bryanbraun/connect-four for the frontend
+* clone this repository and connect-four-js, forked from bryanbraun/connect-four for the frontend
 
 ```
 git clone https://github.com/scem/connect-four.git
