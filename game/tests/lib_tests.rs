@@ -70,7 +70,7 @@ fn test_possible_moves() {
     for _ in 0..6 {
         let _ = cf.drop_stone(&p, Column::Four);
     }
-    let pm:Vec<Rc<Move<Column>>> = cf.possible_moves(&p);
+    let pm:Vec<Rc<dyn Move<Column>>> = cf.possible_moves(&p);
     //println!("{:?}", &cf.field);
     for x in &pm {
         println!("{:?}", &x.data());

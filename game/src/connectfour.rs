@@ -1,5 +1,5 @@
 //pub mod generic;
-use generic::*;
+use generic::{Game,Move,Player,Score,Strategy,Withdraw};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -12,7 +12,7 @@ pub struct ConnectFour {
     field: Vec<Vec<Option<Player>>>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Column {
     One, Two, Three, Four, Five, Six, Seven, Zero
 }
@@ -62,8 +62,8 @@ impl Move<Column> for ConnectFourMove {
 }
 
 impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
-    fn possible_moves(&self, _: &Player) -> Vec<Rc<Move<Column>>> {
-        let mut allowed: Vec<Rc<Move<Column>>> = Vec::new();
+    fn possible_moves(&self, _: &Player) -> Vec<Rc<dyn Move<Column>>> {
+        let mut allowed: Vec<Rc<dyn Move<Column>>> = Vec::new();
         let mut i:usize = 0;
         for col in &self.field {
             if col.len() < ConnectFour::height() {
@@ -76,7 +76,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         allowed
     }
 
-    fn make_move(&mut self, p: &Player, mv: Rc<Move<Column>>) -> Result<Score, Withdraw> {
+    fn make_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
         if ConnectFour::height() == self.field[n].len() {
             // column is obviously already filled to the top
@@ -85,13 +85,13 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
             self.field[n].push(match p {
                 Player::White => Some(Player::White),
                 Player::Black => Some(Player::Black),
-                Player::Grey => Some(Player::Grey),
+                Player::Gray => Some(Player::Gray),                
             });
             self.get_score(p, n, self.field[n].len()-1)
         }
     }
 
-    fn withdraw_move(&mut self, _p: &Player, mv: Rc<Move<Column>>) {
+    fn withdraw_move(&mut self, _p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
         self.field[n].pop();
     }
@@ -104,7 +104,7 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
                 match x {
                     Some(p) => match p { Player::White => { s.push_str("o"); },
                                          Player::Black => { s.push_str("x"); },
-                                         Player::Grey => { s.push_str("n")}
+                                         Player::Gray => { s.push_str(":"); },
                     },
                     None => (),
                 }
@@ -114,7 +114,6 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
         s.push_str("------");
         s
     }
-
     fn state(&self) -> &Vec<Vec<Option<Player>>> {
         &self.field
     }
@@ -137,7 +136,7 @@ impl ConnectFour {
             field: Vec::with_capacity(ConnectFour::width()),
         };
         for _coln in 0..ConnectFour::width() {
-            let mut col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
+            let col:Vec<Option<Player>> = Vec::with_capacity(ConnectFour::height());
             cf.field.push(col);
         };
         cf
@@ -154,7 +153,7 @@ impl ConnectFour {
                     Some(player) => match player {
                           Player::White => Some(Player::White),
                           Player::Black => Some(Player::Black),
-                          Player::Grey => Some(Player::Grey),
+                          Player::Gray => Some(Player::Gray),
                     }, 
                     None => None, 
                 });
@@ -263,39 +262,9 @@ impl ConnectFour {
         }
         false
     }
-
-    pub fn replicate(plan: String) -> ConnectFour {
-        let mut g = ConnectFour::new();
-        for (i, line) in plan.split("\n").enumerate() {
-            match i {
-                b if (b > 0 && b < 8) => {
-                    for c in line.chars() {
-                        g.drop_stone(
-                            match c {
-                                'x' => &Player::Black,
-                                'o' => &Player::White,
-                                'n' => &Player::Grey,
-                                what => { println!("{}, {}", what, i); panic!(); },
-                            },
-                            Column::from_usize(i-1)
-                        ).unwrap(); 
-                    }
-                },
-                _ => assert_eq!(line, "------"),
-            }
-        }
-        g
-    }
 }
 
 //### connect four strategy #######################################################################
-pub struct NaiveStrategy {}
-impl Strategy<Column,Vec<Vec<Option<Player>>>> for NaiveStrategy {
-    fn evaluate_move(&self, _g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                     _p: &Player, _mv: Rc<Move<Column>>) -> Result<f32,Withdraw> {
-        Ok(0.0)
-    }
-}
 
 pub struct ConnectFourStrategy {
     pub oscore_koeff: f32,
@@ -365,8 +334,8 @@ impl ConnectFourStrategy {
 use std::cmp;
 impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
     
-    fn evaluate_move(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                     p: &Player, mv: Rc<Move<Column>>) 
+    fn evaluate_move(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+                     p: &Player, mv: Rc<dyn Move<Column>>) 
     -> Result<f32, Withdraw> {
         let n = mv.data().to_usize();
         let m = g.borrow().state()[n].len();
@@ -383,8 +352,10 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
         }
 
         // copy current state into evaluation field
-        let black = |player: &Player| { match player { Player::Black => Cell::M, Player::White => Cell::O, Player::Grey => Cell::D, }};
-        let white = |player: &Player| { match player { Player::White => Cell::M, Player::Black => Cell::O, Player::Grey => Cell::D, }};
+        let black = |player: &Player| { match player {
+            Player::Black => Cell::M, Player::White => Cell::O, Player::Gray => Cell::D }};
+        let white = |player: &Player| { match player {
+            Player::White => Cell::M, Player::Black => Cell::O, Player::Gray => Cell::D }};
         let mut i:usize = 0;
         for c in g.borrow().state() { // that's the current Connect Four field
             let mut j:usize = 0;
@@ -392,7 +363,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for ConnectFourStrategy {
                 match f {
                     Some(Player::Black) => efield[i][j] = black(p),
                     Some(Player::White) => efield[i][j] = white(p),
-                    Some(Player::Grey) => efield[i][j] = Cell::D,
+                    Some(Player::Gray) => efield[i][j] = Cell::D,
                     None => (),
                 }
                 j += 1;
@@ -430,14 +401,14 @@ impl ConnectFourStrategy {
     }
 
     fn fill_in_dead_cells(&self, 
-            g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+            g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
             mut efield: Vec<Vec<Cell>>)  -> Vec<Vec<Cell>> {
         let mut mutable_game = g.borrow_mut();
         
         let mut cp = &Player::White;
         for col in 0..ConnectFour::width() {
             // look for mutual tabus
-            let mut mv = Rc::new(ConnectFourMove {
+            let mv = Rc::new(ConnectFourMove {
                 data: Column::from_usize(col) 
             });
             let mut i = 0;
@@ -468,8 +439,8 @@ impl ConnectFourStrategy {
 
     // comparing tabu rows before and after the move
     // panicks if the move is not allowed
-    fn tabu_diff_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
-                  p: &Player, mv: Rc<Move<Column>>)  -> f32 {
+    fn tabu_diff_score(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
+                  p: &Player, mv: Rc<dyn Move<Column>>)  -> f32 {
         let ground_score = self.tabu_score(Rc::clone(&g), p);
 
         g.borrow_mut().make_move(p, Rc::clone(&mv)).unwrap();
@@ -483,7 +454,7 @@ impl ConnectFourStrategy {
         offense_score - defense_score * self.tabu_defense_koeff
     }
 
-    fn tabu_score(&self, g: Rc<RefCell<Game<Column,Vec<Vec<Option<Player>>>>>>,
+    fn tabu_score(&self, g: Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>,
                   p: &Player)  -> f32 {
         let mut mutable_game = g.borrow_mut();
         
