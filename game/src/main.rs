@@ -90,7 +90,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let nworker = default_int(args.get(3), 3);
-    let toplimit = default_int(args.get(4), 4) as i32;
+    let toplimit = default_int(args.get(4), 0) as i32;
     let player = match &args.get(2) {
         Some(p) =>  {
             match &p[..] {

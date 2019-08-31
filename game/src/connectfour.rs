@@ -2,7 +2,7 @@
 use generic::{Game,Move,Player,Score,Strategy,Withdraw};
 use std::rc::Rc;
 use std::cell::RefCell;
-
+use std::cmp::{max, min};
 
 //#################################################################################################
 // specifically Connect Four
@@ -262,6 +262,161 @@ impl ConnectFour {
         }
         false
     }
+
+    fn get_influence_range(&self, n:usize, m:usize) -> Vec<(usize,usize)>{
+        let n = n as i8;
+        let m = m as i8;
+        let mut x = Vec::new();
+        for i in 1..4 {
+            x.push((n, m-i));
+            x.push((n-i, m-i));
+            x.push((n-i, m));
+            x.push((n-i, m+i));
+            x.push((n+i, m-i));
+            x.push((n+i, m));
+            x.push((n+i, m+i));
+        }
+        x.into_iter()
+         .filter(|(a,b)| { *a>=0 && *a< ConnectFour::width() as i8
+                        && *b>=0 && *b< ConnectFour::height() as i8})
+         .map(|(a,b)| { (a as usize, b as usize) })
+         .collect()
+    }
+
+    fn is_dead(&self, n:&usize, m:&usize) -> bool {
+        let h = ConnectFour::height();
+        let w = ConnectFour::width();
+        let color = match self.field[*n].get(*m) {
+            None => return false,
+            Some(None) => return false,
+            Some(Some(Player::Gray)) => return false, // it's dead alright but not grayable
+            Some(Some(player)) => player,
+        };
+        //horizontal
+        let mut maxl = 1;
+        for ni in max(0,n-3) as usize..*n {
+            match self.field[ni].get(*m) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        for ni in *n..min(n+3,w) as usize {
+            match self.field[ni].get(*m) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        if maxl >= 4 { return false; }
+        //vertical
+        let mut maxl = 1;
+        for mi in max(0,m-3) as usize..*m {
+            match self.field[*n].get(mi) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        for mi in *m..min(m+3,h) as usize {
+            match self.field[*n].get(mi) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        if maxl >= 4 { return false; }
+        //diagonal '/'
+        let mut maxl = 1;
+        for i in 1..min(min(4,*n+1),*m+1) as usize {
+            match self.field[*n-i].get(*m-i) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        for i in 1..min(min(4,w-*n),h-*m) as usize {
+            match self.field[*n+i].get(*m+i) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        if maxl >= 4 { return false; }
+        //diagonal '\'
+        let mut maxl = 1;
+        for i in 1..min(min(4,*n+1),h-*m) as usize {
+            match self.field[*n-i].get(*m+i) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        for i in 1..min(min(4,w-*n),*m+1) as usize {
+            match self.field[*n+i].get(*m-i) {
+                None => maxl+=1,
+                Some(None) => maxl+=1,
+                Some(Some(stone)) => {
+                    if color == stone { maxl+=1; }
+                    else { break; }
+                },
+            }
+        }
+        if maxl >= 4 { return false; }
+        false
+    }
+
+    pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
+        let n = mv.data().to_usize();
+        if ConnectFour::height() == self.field[n].len() {
+            // column is obviously already filled to the top
+            Err(Withdraw::NotAllowed)
+        } else {
+            // drop the stone
+            self.field[n].push(match p {
+                Player::White => Some(Player::White),
+                Player::Black => Some(Player::Black),
+                Player::Gray => Some(Player::Gray),                
+            });
+            // note new column height
+            let m = self.field[n].len()-1;
+            // identify dead stones, killed by this move
+            let grayable = self.get_influence_range(n,m)
+                .into_iter()
+                .filter(|(a,b)| {
+                    self.is_dead(a,b)
+                })
+                .collect::<Vec<(usize,usize)>>();
+            // turn them gray
+            grayable.into_iter().for_each(|(a,b)| {
+                self.field[a][b] = Some(Player::Gray);
+            });
+            // return the score
+            self.get_score(p, n, m)
+        }
+    }
+
 }
 
 //### connect four strategy #######################################################################
