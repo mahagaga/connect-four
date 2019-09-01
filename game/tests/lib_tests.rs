@@ -483,11 +483,12 @@ fn replicate_game(plan: &str) -> ConnectFour {
 }
 
 #[test]
-fn test_bruteforce_unpredictive() {
-        
+fn test_bruteforce() {
+
     let nworker = 1;
-    let toplimit = 0;
     let player = Player::Black;
+
+    let strategy = BruteForceStrategy::new(nworker);
     
     let game = ConnectFour::replicate_game("------
 
@@ -499,42 +500,26 @@ o
 
 ------");
 
-    let strategy = BruteForceStrategy::new(nworker);
+    // with some wisdom
     let g = Rc::new(RefCell::new(game.clone()));
-
-    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
-        (Some(mv), Some(score)) => {
-            assert!(Column::Three == *mv.data());
-            if let Score::Won(n) = score { assert!(n == 2); }
-            else { assert!(false); }
-
-            let dump = std::fs::read_to_string(STRDMP).unwrap();
-            let expected = std::fs::read_to_string("tests/data/bf0").unwrap();
-            assert!(dump == expected);
-        },
-        _ => { assert!(false); },
-    };
-}
-
-#[test]
-fn test_bruteforce_predictive() {
-
-    let nworker = 1;
     let toplimit = 4;
-    let player = Player::Black;
     
-    let game = ConnectFour::replicate_game("------
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
 
-x
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit4").unwrap();
+            assert!(dump == expected);
+        },
+        _ => { assert!(false); },
+    };
 
-xo
-
-o
-
-------");
-
-    let strategy = BruteForceStrategy::new(nworker);
+    // with no wisdom
     let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
 
     match strategy.find_best_move(g.clone(), &player, toplimit, true) {
         (Some(mv), Some(score)) => {
@@ -543,11 +528,12 @@ o
             else { assert!(false); }
 
             let dump = std::fs::read_to_string(STRDMP).unwrap();
-            let expected = std::fs::read_to_string("tests/data/bf4").unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit0").unwrap();
             assert!(dump == expected);
         },
         _ => { assert!(false); },
     };
+
 }
 
 #[test]
