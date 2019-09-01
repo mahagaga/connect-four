@@ -83,14 +83,14 @@ o
             String::from(default)
         },
     };
-    replicate_game(&plan[..])
+    ConnectFour::replicate_game(&plan[..])
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     let nworker = default_int(args.get(3), 3);
-    let toplimit = default_int(args.get(4), 0) as i32;
+    let toplimit = default_int(args.get(4), 4) as i32;
     let player = match &args.get(2) {
         Some(p) =>  {
             match &p[..] {
@@ -115,25 +115,4 @@ fn main() {
     .collect::<Vec<_>>();
 }
 
-fn replicate_game(plan: &str) -> ConnectFour {
-    let mut g = ConnectFour::new();
-    for (i, line) in plan.split("\n").enumerate() {
-        match i {
-            b if (b > 0 && b < 8) => {
-                for c in line.chars() {
-                    g.drop_stone(
-                        match c {
-                            'x' => &Player::Black,
-                            'o' => &Player::White,
-                            what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
-                        },
-                        Column::from_usize(i-1)
-                    ).unwrap(); 
-                }
-            },
-            c if (c==0 || c ==8) => assert_eq!(line, "------"),
-            _ => (),
-        }
-    }
-    g
-}
+

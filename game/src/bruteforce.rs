@@ -191,7 +191,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
             _game_evaluation: bool
         ) -> (Option<Rc<dyn Move<Column>>>, Option<Score>) {
         let principal = hash_from_game(g.clone());
-        let (conductor, receiver) = Conductor::init_conductor_and_band(principal, moves_ahead, p, self.nworkers);
+        let (conductor, receiver) = Conductor::init_conductor_and_band(principal, moves_ahead, p, self.nworkers, String::from(STRDMP));
         conductor.claim_public_interest(g);
         let (column, score) = self.await_verdict(receiver);
         match column {
@@ -200,6 +200,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
         }
     }
 }
+pub static STRDMP: &str  = "strdmp";
 
 impl BruteForceStrategy {
     pub fn new(nworkers:usize) -> Self {
@@ -233,33 +234,49 @@ pub struct Interest {
     worker_id: Option<usize>,
 }
 
+use std::path::Path;
+
 pub struct Conductor {
     sender:Sender<Interest>,
 }
 
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::fs::File;
+
 impl Conductor {
-    fn dump_store(
+    fn dump_store (
         game_store:Arc<Mutex<HashMap<GameHash,GameRecord>>>,
         principal:GameHash,
         p:&Player,
-    ) {
+        printer:Box<&Path>,
+    ) -> Result<(),std::io::Error> {
+
+        let mut buffer = BufWriter::new(File::create(*printer)?);
+        let mut println = |line:String| {
+            let bytes = line.as_bytes();
+            buffer.write_all(bytes).unwrap();
+            buffer.write_all(b"\n").unwrap();
+            buffer.flush().unwrap();
+        };
+
 //print!("+_");
         let gs = game_store.lock().unwrap();
 //print!("_+");
 
         // TODO: full implementation
         if let Some(record) = (*gs).get(&principal) {
-             println!("game {} state {:?}", principal, record.state);
+             println(format!("game {} state {:?}", principal, record.state));
         }
 
         // print the next couple of moves
 
         let g = Rc::new(RefCell::new(game_from_hash(principal)));
-        println!("{}", g.borrow().display());
+        println(format!("{}", g.borrow().display()));
         
         let options = g.borrow().possible_moves(p);
         if options.is_empty() { // no possible moves left: stalemate
-            return ();
+            return Ok(());
         }
 
         for mv in options.into_iter() {
@@ -267,35 +284,35 @@ impl Conductor {
             match score_result {
                 Ok(score) => match score {
                     // found a winning move: immediate return
-                    Score::Won(in_n) => println!("immediate winner in {}: {:?}", in_n, mv.data()),
-                    Score::Remis(in_n) => println!("immediate draw in {}: {:?}", in_n, mv.data()),
-                    Score::Lost(in_n) => println!("immediate loser in {}: {:?}", in_n, mv.data()),
+                    Score::Won(in_n) => println(format!("immediate winner in {}: {:?}", in_n, mv.data())),
+                    Score::Remis(in_n) => println(format!("immediate draw in {}: {:?}", in_n, mv.data())),
+                    Score::Lost(in_n) => println(format!("immediate loser in {}: {:?}", in_n, mv.data())),
 
                     // found an undecided move, winning is still an option: let opponent make a move
                     Score::Undecided(_) => {
-                        println!("option {:?}", mv.data());
+                        println(format!("option {:?}", mv.data()));
                         let anti_options = g.borrow().possible_moves(p.opponent());
 
                         for anti_mv in anti_options.into_iter() {
                             let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
                             match anti_score {
                                 Ok(score) => match score {
-                                    Score::Won(in_n) => println!("- consequent winner in {}: {:?}", in_n, anti_mv.data()),
-                                    Score::Lost(in_n) => println!("- consequent loser in {}: {:?}", in_n, anti_mv.data()),
-                                    Score::Remis(in_n) => println!("- consequent draw in {}: {:?}", in_n, anti_mv.data()),
+                                    Score::Won(in_n) => println(format!("- consequent winner in {}: {:?}", in_n, anti_mv.data())),
+                                    Score::Lost(in_n) => println(format!("- consequent loser in {}: {:?}", in_n, anti_mv.data())),
+                                    Score::Remis(in_n) => println(format!("- consequent draw in {}: {:?}", in_n, anti_mv.data())),
                                     Score::Undecided(_) => { // unclear from the bord: check game store
                                         let hash = hash_from_game(g.clone());
                                         if let Some(record) = (*gs).get(&hash) {
                                             match &record.state {
                                                 GameState::Decided(record_score,_) => match record_score {
-                                                    Score::Lost(in_n) => println!("- stored loser in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
-                                                    Score::Remis(in_n) => println!("- stored draw in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
-                                                    Score::Won(in_n) => println!("- stored winner in {}: {:?} -> {}", in_n, anti_mv.data(), hash),
-                                                    Score::Undecided(_) => println!("- STORED DECIDED UNDECIDED (?) {:?} -> {}", anti_mv.data(), hash),
+                                                    Score::Lost(in_n) => println(format!("- stored loser in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                    Score::Remis(in_n) => println(format!("- stored draw in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                    Score::Won(in_n) => println(format!("- stored winner in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                    Score::Undecided(_) => println(format!("- STORED DECIDED UNDECIDED (?) {:?} -> {}", anti_mv.data(), hash)),
                                                 }
-                                                state => println!("- stored undecided ({:?}) {:?} -> {}", state, anti_mv.data(), hash),
+                                                state => println(format!("- stored undecided ({:?}) {:?} -> {}", state, anti_mv.data(), hash)),
                                             }
-                                        } else { println!("- unrecorded {:?} -> {}", anti_mv.data(), hash); }
+                                        } else { println(format!("- unrecorded {:?} -> {}", anti_mv.data(), hash)); }
                                     },
                                 },
                                 Err(_) => panic!("unexpected error in anti move"),
@@ -309,9 +326,10 @@ impl Conductor {
             }
             g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
         }
+        Ok(())
     }
 
-    fn init_conductor_and_band (principal:GameHash, moves_ahead:i32, p:&Player, nworkers:usize) -> (Self, Receiver<Verdict>) {
+    fn init_conductor_and_band (principal:GameHash, moves_ahead:i32, p:&Player, nworkers:usize, dumpfile:String) -> (Self, Receiver<Verdict>) {
         let (itx, interests) = channel::<Interest>();
         let interest_sender = itx.clone();
         let (final_verdict, rx) = channel::<Verdict>();
@@ -388,7 +406,8 @@ thread::spawn(move|| {
                                     }
                                 }
                             }
-                            Conductor::dump_store(game_store.clone(), principal, &player);
+                            let printer = Box::new(Path::new(&dumpfile[..]));
+                            Conductor::dump_store(game_store.clone(), principal, &player, printer).unwrap();
                             final_verdict.send(Verdict{
                                 score: score.clone(),
                                 column: column.clone(),

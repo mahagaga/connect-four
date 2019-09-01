@@ -1,6 +1,7 @@
 extern crate game;
 use game::connectfour::*;
 use game::generic::*;
+use game::bruteforce::*;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -480,3 +481,77 @@ fn replicate_game(plan: &str) -> ConnectFour {
     }
     g
 }
+
+#[test]
+fn test_bruteforce_unpredictive() {
+        
+    let nworker = 1;
+    let toplimit = 0;
+    let player = Player::Black;
+    
+    let game = ConnectFour::replicate_game("------
+
+x
+
+xo
+
+o
+
+------");
+
+    let strategy = BruteForceStrategy::new(nworker);
+    let g = Rc::new(RefCell::new(game.clone()));
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/bf0").unwrap();
+            assert!(dump == expected);
+        },
+        _ => { assert!(false); },
+    };
+}
+
+#[test]
+fn test_bruteforce_predictive() {
+
+    let nworker = 1;
+    let toplimit = 4;
+    let player = Player::Black;
+    
+    let game = ConnectFour::replicate_game("------
+
+x
+
+xo
+
+o
+
+------");
+
+    let strategy = BruteForceStrategy::new(nworker);
+    let g = Rc::new(RefCell::new(game.clone()));
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/bf4").unwrap();
+            assert!(dump == expected);
+        },
+        _ => { assert!(false); },
+    };
+}
+
+#[test]
+fn test_graying() {
+    panic!("not yet implemented");
+}
+

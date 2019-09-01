@@ -1,0 +1,66 @@
+game 1152921916923715584 state Decided(Won(2), Some(Three))
+------
+
+x
+
+xo
+
+o
+
+------
+option One
+- unrecorded One -> 1152921916923715590
+- unrecorded Two -> 1152921916923731970
+- unrecorded Three -> 1152921916940492802
+- unrecorded Four -> 1152923016435343362
+- unrecorded Five -> 1153203391900426242
+- unrecorded Six -> 5764607935351103490
+- unrecorded Seven -> 4723519404786568929282
+option Two
+- unrecorded One -> 1152921916923748353
+- unrecorded Two -> 1152921916923813888
+- unrecorded Three -> 1152921916940525568
+- unrecorded Four -> 1152923016435376128
+- unrecorded Five -> 1153203391900459008
+- unrecorded Six -> 5764607935351136256
+- unrecorded Seven -> 4723519404786568962048
+option Three
+- unrecorded One -> 1152921916957270017
+- unrecorded Two -> 1152921916957286400
+- unrecorded Three -> 1152921917024378880
+- unrecorded Four -> 1152923016468897792
+- unrecorded Five -> 1153203391933980672
+- unrecorded Six -> 5764607935384657920
+- unrecorded Seven -> 4723519404786602483712
+option Four
+- unrecorded One -> 1152924115946971137
+- unrecorded Two -> 1152924115946987520
+- unrecorded Three -> 1152924115963748352
+- unrecorded Four -> 1152928513993482240
+- unrecorded Five -> 1153205590923681792
+- unrecorded Six -> 5764610134374359040
+- unrecorded Seven -> 4723519406985592184832
+option Five
+- unrecorded One -> 1153484866877136897
+- unrecorded Two -> 1153484866877153280
+- unrecorded Three -> 1153484866893914112
+- unrecorded Four -> 1153485966388764672
+- unrecorded Five -> 1154610766783979520
+- unrecorded Six -> 5765170885304524800
+- unrecorded Seven -> 4723519967736522350592
+option Six
+- unrecorded One -> 10376293953778491393
+- unrecorded Two -> 10376293953778507776
+- unrecorded Three -> 10376293953795268608
+- unrecorded Four -> 10376295053290119168
+- unrecorded Five -> 10376575428755202048
+- unrecorded Six -> 28823038027488043008
+- unrecorded Seven -> 4732742776823423705088
+option Seven
+- unrecorded One -> 9445885887656214142977
+- unrecorded Two -> 9445885887656214159360
+- unrecorded Three -> 9445885887656230920192
+- unrecorded Four -> 9445885888755725770752
+- unrecorded Five -> 9445886169131190853632
+- unrecorded Six -> 9450497573674641530880
+- unrecorded Seven -> 28335351819134794997760

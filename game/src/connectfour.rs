@@ -163,6 +163,29 @@ impl ConnectFour {
         cf
     }
 
+    pub fn replicate_game(plan: &str) -> Self {
+        let mut g = ConnectFour::new();
+        for (i, line) in plan.split("\n").enumerate() {
+            match i {
+                b if (b > 0 && b < 8) => {
+                    for c in line.chars() {
+                        g.drop_stone(
+                            match c {
+                                'x' => &Player::Black,
+                                'o' => &Player::White,
+                                what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
+                            },
+                            Column::from_usize(i-1)
+                        ).unwrap(); 
+                    }
+                },
+                c if (c==0 || c ==8) => assert_eq!(line, "------"),
+                _ => (),
+            }
+        }
+        g
+    }
+
     fn get_score(&self, p: &Player, n: usize, m: usize) -> Result<Score, Withdraw> {
 
         // vertical
