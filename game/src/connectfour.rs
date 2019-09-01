@@ -173,6 +173,7 @@ impl ConnectFour {
                             match c {
                                 'x' => &Player::Black,
                                 'o' => &Player::White,
+                                ':' => &Player::Gray,
                                 what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
                             },
                             Column::from_usize(i-1)
@@ -307,6 +308,7 @@ impl ConnectFour {
     }
 
     fn is_dead(&self, n:&usize, m:&usize) -> bool {
+//println!("{} {}",n,m);
         let h = ConnectFour::height();
         let w = ConnectFour::width();
         let color = match self.field[*n].get(*m) {
@@ -316,6 +318,9 @@ impl ConnectFour {
             Some(Some(player)) => player,
         };
         //horizontal
+//if *n==6 && *m==0 {
+//    println!("horizontal");
+//}
         let mut maxl = 1;
         for ni in max(0,n-3) as usize..*n {
             match self.field[ni].get(*m) {
@@ -339,6 +344,9 @@ impl ConnectFour {
         }
         if maxl >= 4 { return false; }
         //vertical
+//if *n==6 && *m==0 {
+//    println!("vertical");
+//}
         let mut maxl = 1;
         for mi in max(0,m-3) as usize..*m {
             match self.field[*n].get(mi) {
@@ -362,6 +370,9 @@ impl ConnectFour {
         }
         if maxl >= 4 { return false; }
         //diagonal '/'
+//if *n==6 && *m==0 {
+//    println!("diagonal '/'");
+//}
         let mut maxl = 1;
         for i in 1..min(min(4,*n+1),*m+1) as usize {
             match self.field[*n-i].get(*m-i) {
@@ -385,6 +396,9 @@ impl ConnectFour {
         }
         if maxl >= 4 { return false; }
         //diagonal '\'
+//if *n==6 && *m==0 {
+//    println!("diagonal '\'");
+//}
         let mut maxl = 1;
         for i in 1..min(min(4,*n+1),h-*m) as usize {
             match self.field[*n-i].get(*m+i) {
@@ -407,7 +421,8 @@ impl ConnectFour {
             }
         }
         if maxl >= 4 { return false; }
-        false
+
+        true
     }
 
     pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {

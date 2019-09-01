@@ -19,11 +19,11 @@ use std::time::Duration;
 
 type GameHash = i128;
 
-fn hash_from_game(game:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>) -> GameHash {
+pub fn hash_from_game(game:Rc<RefCell<dyn Game<Column,Vec<Vec<Option<Player>>>>>>) -> GameHash {
     hash_from_state(game.borrow().state())
 }
 
-fn hash_from_state(state:&Vec<Vec<Option<Player>>>) -> GameHash {
+pub fn hash_from_state(state:&Vec<Vec<Option<Player>>>) -> GameHash {
     let mut s = 0;
     let mut f = 1;
     let mut ci = 0;
@@ -280,7 +280,7 @@ impl Conductor {
         }
 
         for mv in options.into_iter() {
-            let score_result = g.borrow_mut().make_move(p, Rc::clone(&mv));
+            let score_result = g.borrow_mut().make_shading_move(p, Rc::clone(&mv));
             match score_result {
                 Ok(score) => match score {
                     // found a winning move: immediate return
@@ -294,7 +294,7 @@ impl Conductor {
                         let anti_options = g.borrow().possible_moves(p.opponent());
 
                         for anti_mv in anti_options.into_iter() {
-                            let anti_score = g.borrow_mut().make_move(p.opponent(), Rc::clone(&anti_mv));
+                            let anti_score = g.borrow_mut().make_shading_move(p.opponent(), Rc::clone(&anti_mv));
                             match anti_score {
                                 Ok(score) => match score {
                                     Score::Won(in_n) => println(format!("- consequent winner in {}: {:?}", in_n, anti_mv.data())),

@@ -538,6 +538,54 @@ o
 
 #[test]
 fn test_graying() {
-    panic!("not yet implemented");
+    let nworker = 1;
+    let player = Player::Black;
+    let strategy = BruteForceStrategy::new(nworker);
+    
+    let game = ConnectFour::replicate_game("------
+
+xo
+
+xo
+
+ox
+ox
+------");
+    let expected_after_move_five = "------
+
+xo
+
+xo
+x
+ox
+:x
+------";
+    let mut mg = game.clone();
+    mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Five })).unwrap();
+    assert!(mg.display().eq(expected_after_move_five), mg.display());
+   
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_five).state());
+    assert!(hash == expected_hash);
+    assert!(hash == 47234041685600184066048, "{} is not 47234041685600184066048", hash);
+
+    // at last check shading in action
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/shading").unwrap();
+            assert!(dump == expected, dump);
+        },
+        _ => {
+            assert!(false); },
+    };
+
 }
 

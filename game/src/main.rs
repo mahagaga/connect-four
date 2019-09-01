@@ -74,7 +74,11 @@ o
     let plan = match a {
         Some(path) => match std::fs::read_to_string(path) {
             Err(_) =>  {
-                return game_from_hash(default_int(a, 0) as i128);
+                let h = match path.parse::<i128>() {
+                    Ok(u) => u,
+                    Err(_) => panic!("{} neither file nor hash.", path),
+                };
+                return game_from_hash(h);
             },
             Ok(string) => string,
         },
