@@ -95,18 +95,20 @@ fn main() {
 
     let nworker = default_int(args.get(3), 3);
     let toplimit = default_int(args.get(4), 4) as i32;
+    let game = read_game_from_file(args.get(1));
+
     let player = match &args.get(2) {
         Some(p) =>  {
             match &p[..] {
                 "black" => Player::Black,
                 "white" => Player::White,
+                "show" => { println!("{}",game.display()); return; }
                 _ => panic!("{} neither black nor white. you are black then.", p),
             }
         },
         None => Player::Black,
     };
     
-    let game = read_game_from_file(args.get(1));
     let games = [game,];
     let _timep = games.iter()
     .map(|game| {

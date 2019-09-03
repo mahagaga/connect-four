@@ -78,22 +78,34 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
 
     fn make_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
-        if ConnectFour::height() == self.field[n].len() {
+        let m = self.field[n].len();
+        if ConnectFour::height() == m {
             // column is obviously already filled to the top
             Err(Withdraw::NotAllowed)
         } else {
-            self.field[n].push(match p {
-                Player::White => Some(Player::White),
-                Player::Black => Some(Player::Black),
-                Player::Gray => Some(Player::Gray),                
-            });
-            self.get_score(p, n, self.field[n].len()-1)
+            // drop the stone
+            self.field[n].push(Some(p.clone()));
+            
+            
+            // return the score
+            self.get_score(p, n, m)
         }
     }
 
     fn withdraw_move(&mut self, _p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
-        self.field[n].pop();
+//        let m = self.field[n].len();
+//        if 0 == m {
+//            // column is obviously already empty
+//            Err(Withdraw::NotAllowed)
+//        } else {
+
+            // un-drop the stone
+            self.field[n].pop();
+                        
+//            // return the score
+//            self.get_score(p, n, m)
+//        }
     }
 
     fn display(&self) -> String {
@@ -192,7 +204,7 @@ impl ConnectFour {
         // vertical
         let below = self.matching_distance(vec![n,n,n], m, Step::Down, p);
         if below >= 3 {
-            //println!("{} below {}", below, m);
+//println!("{} below {}", below, m);
             return Ok(Score::Won(0))
         }
 
@@ -202,7 +214,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Plane, p);
         if left + right >= 3 {
-            //println!("left {}, right {}", left, right);
+//println!("left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -212,7 +224,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Down, p);
         if left + right >= 3 {
-            //println!("\\left {}, right {}", left, right);
+//println!("\\left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -222,7 +234,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Up, p);
         if left + right >= 3 {
-            //println!("/left {}, right {}", left, right);
+//println!("/left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -256,7 +268,7 @@ impl ConnectFour {
             match &self.field[i][j] {
                 Some(cp) => {
                     if *cp == *p {
-                        //println!("{} {} matches, dist {} up", i, j, distance);
+//println!("{} {} matches, dist {} up", i, j, distance);
                         distance += 1;
                     } else {
                         break;
@@ -293,6 +305,7 @@ impl ConnectFour {
         let mut x = Vec::new();
         for i in 1..4 {
             x.push((n, m-i));
+            x.push((n, m+i));
             x.push((n-i, m-i));
             x.push((n-i, m));
             x.push((n-i, m+i));
@@ -307,119 +320,79 @@ impl ConnectFour {
          .collect()
     }
 
-    fn is_dead(&self, n:&usize, m:&usize) -> bool {
-//println!("{} {}",n,m);
+    fn is_dead(&self, n:&usize, m:&usize, tabu:&Player) -> bool {
         let h = ConnectFour::height();
         let w = ConnectFour::width();
-        let color = match self.field[*n].get(*m) {
-            None => return false,
-            Some(None) => return false,
-            Some(Some(Player::Gray)) => return false, // it's dead alright but not grayable
-            Some(Some(player)) => player,
+
+        let killer = |x:&Option<Player>| -> bool {
+            match x {
+                None => false,
+                Some(color) => {
+                    if color == tabu { true }
+                    else { false }
+                },
+            }
         };
+
+        let count_options = |n:usize,m:usize,dn:i8,dm:i8| -> i8 {
+//if n==6 && m==0 {
+//    println!("{} {} {} {}", n,m,dn,dm);
+//}
+            let mut maxl=0;
+            let mut distance = match dn {
+                1 => min(4, w-n),
+                -1 => min(4, n+1),
+                0 => 4,
+                _ => panic!("???"),
+            };
+            distance = match dm {
+                1 => min(distance, h-m),
+                -1 => min(distance, m+1),
+                0 => distance,
+                _ => panic!("???"),
+            };
+//print!("{}", distance);
+            for i in 1..distance {
+                let nl = (n as i8+(i as i8)*dn) as usize;
+                let ml = (m as i8+(i as i8)*dm) as usize;
+                
+                match self.field[nl].get(ml) {
+                    Some(field) => {
+                        if killer(&field) { 
+//print!(" killer {:?} {} {}", field, nl, ml);
+                            break;
+                        }
+                        else { maxl=maxl+1; }
+                    },
+                    None => { maxl=maxl+1; },
+                }
+            }
+//println!(" {}", maxl);
+            maxl
+        };           
+
         //horizontal
-//if *n==6 && *m==0 {
-//    println!("horizontal");
-//}
         let mut maxl = 1;
-        for ni in max(0,n-3) as usize..*n {
-            match self.field[ni].get(*m) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
-        for ni in *n..min(n+3,w) as usize {
-            match self.field[ni].get(*m) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
+        maxl += count_options(*n,*m,1,0);
+        maxl += count_options(*n,*m,-1,0);
         if maxl >= 4 { return false; }
+
         //vertical
-//if *n==6 && *m==0 {
-//    println!("vertical");
-//}
         let mut maxl = 1;
-        for mi in max(0,m-3) as usize..*m {
-            match self.field[*n].get(mi) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
-        for mi in *m..min(m+3,h) as usize {
-            match self.field[*n].get(mi) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
+        maxl += count_options(*n,*m,0,1);
+        maxl += count_options(*n,*m,0,-1);
         if maxl >= 4 { return false; }
+
         //diagonal '/'
-//if *n==6 && *m==0 {
-//    println!("diagonal '/'");
-//}
         let mut maxl = 1;
-        for i in 1..min(min(4,*n+1),*m+1) as usize {
-            match self.field[*n-i].get(*m-i) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
-        for i in 1..min(min(4,w-*n),h-*m) as usize {
-            match self.field[*n+i].get(*m+i) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
+        maxl += count_options(*n,*m,1,1);
+        maxl += count_options(*n,*m,-1,-1);
         if maxl >= 4 { return false; }
+        
         //diagonal '\'
-//if *n==6 && *m==0 {
-//    println!("diagonal '\'");
-//}
         let mut maxl = 1;
-        for i in 1..min(min(4,*n+1),h-*m) as usize {
-            match self.field[*n-i].get(*m+i) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
-        for i in 1..min(min(4,w-*n),*m+1) as usize {
-            match self.field[*n+i].get(*m-i) {
-                None => maxl+=1,
-                Some(None) => maxl+=1,
-                Some(Some(stone)) => {
-                    if color == stone { maxl+=1; }
-                    else { break; }
-                },
-            }
-        }
+        maxl += count_options(*n,*m,-1,1);
+        maxl += count_options(*n,*m,1,-1);
         if maxl >= 4 { return false; }
 
         true
@@ -427,7 +400,8 @@ impl ConnectFour {
 
     pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
-        if ConnectFour::height() == self.field[n].len() {
+        let m = self.field[n].len();
+        if ConnectFour::height() == m {
             // column is obviously already filled to the top
             Err(Withdraw::NotAllowed)
         } else {
@@ -437,24 +411,72 @@ impl ConnectFour {
                 Player::Black => Some(Player::Black),
                 Player::Gray => Some(Player::Gray),                
             });
-            // note new column height
-            let m = self.field[n].len()-1;
-            // identify dead stones, killed by this move
+
             let grayable = self.get_influence_range(n,m)
                 .into_iter()
+                // prefilter by color - smart?
+                .filter(|(q,o)| {
+                    match self.field[*q].get(*o) {
+                        // save energy
+                        Some(Some(pc)) => pc == p.opponent(),
+                        _ => false,
+                    }
+                })
+                // identify dead stones, killed by this move
                 .filter(|(a,b)| {
-                    self.is_dead(a,b)
+                    self.is_dead(a,b,p)
                 })
                 .collect::<Vec<(usize,usize)>>();
+
             // turn them gray
             grayable.into_iter().for_each(|(a,b)| {
                 self.field[a][b] = Some(Player::Gray);
             });
+
             // return the score
             self.get_score(p, n, m)
         }
     }
+    
+    pub fn withdraw_move_unshading(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) {
+        let n = mv.data().to_usize();
+        let m = self.field[n].len()-1;
+//println!("withdraw: {} {}", n,m);
+        if 0 == m {
+            // column is obviously already empty
+//            Err(Withdraw::NotAllowed)
+        } else {
 
+            // un-drop the stone
+            self.field[n].pop();
+
+            // identify undead stones, possibly killed by this move
+            let ungrayable = self.get_influence_range(n,m)
+                .into_iter()
+                // prefilter by color - smart?
+                .filter(|(p,o)| {
+                    match self.field[*p].get(*o) {
+                        // save energy
+                        Some(Some(Player::Gray)) => true,
+                        x => false, //{ println!("f {} {} {:?}", p, o, x); false },
+                    }
+                })
+                // collect cells that were perhaps killed by this move
+                .filter(|(a,b)| {
+//println!("is it dead? {} {} {}", a, b, p);
+                    !self.is_dead(a,b,p)
+                })
+                .collect::<Vec<(usize,usize)>>();
+//println!("ungrayble: {:?}", ungrayable);
+            // turn them back in the game
+            ungrayable.into_iter().for_each(|(a,b)| {
+                self.field[a][b] = Some(p.opponent().clone());
+            });
+
+
+//            Ok(())      
+        }
+    }
 }
 
 //### connect four strategy #######################################################################

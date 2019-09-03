@@ -317,14 +317,14 @@ impl Conductor {
                                 },
                                 Err(_) => panic!("unexpected error in anti move"),
                             }
-                            g.borrow_mut().withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                            g.borrow_mut().withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
                         }
                                         
                     },
                 },
                 Err(_) => panic!("unexpected error in move"),
             }
-            g.borrow_mut().withdraw_move(p, Rc::clone(&mv));
+            g.borrow_mut().withdraw_move_unshading(p, Rc::clone(&mv));
         }
         Ok(())
     }
