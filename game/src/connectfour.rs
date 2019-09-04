@@ -390,7 +390,7 @@ impl ConnectFour {
         true
     }
 
-    pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
+    pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<(Score, Vec<(usize,usize)>), Withdraw> {
         let n = mv.data().to_usize();
         let m = self.field[n].len();
         if ConnectFour::height() == m {
@@ -421,44 +421,37 @@ impl ConnectFour {
                 .collect::<Vec<(usize,usize)>>();
 
             // turn them gray
-            grayable.into_iter().for_each(|(a,b)| {
+            let grayable = grayable.into_iter().map(|(a,b)| {
                 self.field[a][b] = Some(Player::Gray);
-            });
+                (a,b)
+            }).collect();
 
             // return the score
-            self.get_score(p, n, m)
+            let s = self.get_score(p, n, m);
+            match s {
+                Err(withdraw) => Err(withdraw),
+                Ok(score) => Ok((score, grayable)),
+            }
         }
     }
     
-    pub fn withdraw_move_unshading(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) {
+    pub fn withdraw_move_unshading(&mut self,
+            p: &Player,
+            mv: Rc<dyn Move<Column>>,
+            ungrayable: Vec<(usize,usize)>) {
         let n = mv.data().to_usize();
-        let m = self.field[n].len()-1; // this is meant to panic if there is no stone
+        if self.field[n].len() == 0 {
+            panic!("there is no stone to be un-moved");
+        }
+
         // un-drop the stone
         self.field[n].pop();
 
-        // identify undead stones, possibly killed by this move
-        let ungrayable = self.get_influence_range(n,m)
-            .into_iter()
-            // prefilter by color - smart?
-            .filter(|(p,o)| {
-                match self.field[*p].get(*o) {
-                    // save energy
-                    Some(Some(Player::Gray)) => true,
-                    _x => false, //{ println!("f {} {} {:?}", p, o, _x); false },
-                }
-            })
-            // collect cells that were perhaps killed by this move
-            .filter(|(a,b)| {
-//println!("is it dead? {} {} {}", a, b, p);
-                !self.is_dead(a,b,p)
-            })
-            .collect::<Vec<(usize,usize)>>();
-//println!("ungrayble: {:?}", ungrayable);
         // turn them back in the game
         ungrayable.into_iter().for_each(|(a,b)| {
-println!("ungray {} {} {:?}\n{}", n, m, p, self.display());
+//println!("ungray {} {} {:?}\n{}", n, m, p, self.display());
             self.field[a][b] = Some(p.opponent().clone());
-println!("->\n{}", self.display());
+//println!("->\n{}", self.display());
         });
     }
 }

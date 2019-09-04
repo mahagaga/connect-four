@@ -560,7 +560,7 @@ ox
 ------";
     let game = ConnectFour::replicate_game(expected_before_move_six);
     let mut mg = game.clone();
-    mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six })).unwrap();
+    let (_score,grayed) = mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six })).unwrap();
     assert!(mg.display().eq(expected_after_move_six), mg.display());
    
     let hash = hash_from_state(mg.state());
@@ -569,7 +569,7 @@ ox
     assert!(hash == 47234041122650230644736, "{} is not 47234041122650230644736", hash);
 
     // undo
-    mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }));
+    mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }), grayed);
     assert!(mg.display().eq(expected_before_move_six), mg.display());
    
     let hash = hash_from_state(mg.state());

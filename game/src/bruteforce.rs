@@ -282,49 +282,52 @@ impl Conductor {
         for mv in options.into_iter() {
             let score_result = g.borrow_mut().make_shading_move(p, Rc::clone(&mv));
             match score_result {
-                Ok(score) => match score {
-                    // found a winning move: immediate return
-                    Score::Won(in_n) => println(format!("immediate winner in {}: {:?}", in_n, mv.data())),
-                    Score::Remis(in_n) => println(format!("immediate draw in {}: {:?}", in_n, mv.data())),
-                    Score::Lost(in_n) => println(format!("immediate loser in {}: {:?}", in_n, mv.data())),
+                Ok((score,grayed_one)) => {
+                    match score {
+                        // found a winning move: immediate return
+                        Score::Won(in_n) => println(format!("immediate winner in {}: {:?}", in_n, mv.data())),
+                        Score::Remis(in_n) => println(format!("immediate draw in {}: {:?}", in_n, mv.data())),
+                        Score::Lost(in_n) => println(format!("immediate loser in {}: {:?}", in_n, mv.data())),
 
-                    // found an undecided move, winning is still an option: let opponent make a move
-                    Score::Undecided(_) => {
-                        println(format!("option {:?}", mv.data()));
-                        let anti_options = g.borrow().possible_moves(p.opponent());
+                        // found an undecided move, winning is still an option: let opponent make a move
+                        Score::Undecided(_) => {
+                            println(format!("option {:?}", mv.data()));
+                            let anti_options = g.borrow().possible_moves(p.opponent());
 
-                        for anti_mv in anti_options.into_iter() {
-                            let anti_score = g.borrow_mut().make_shading_move(p.opponent(), Rc::clone(&anti_mv));
-                            match anti_score {
-                                Ok(score) => match score {
-                                    Score::Won(in_n) => println(format!("- consequent winner in {}: {:?}", in_n, anti_mv.data())),
-                                    Score::Lost(in_n) => println(format!("- consequent loser in {}: {:?}", in_n, anti_mv.data())),
-                                    Score::Remis(in_n) => println(format!("- consequent draw in {}: {:?}", in_n, anti_mv.data())),
-                                    Score::Undecided(_) => { // unclear from the bord: check game store
-                                        let hash = hash_from_game(g.clone());
-                                        if let Some(record) = (*gs).get(&hash) {
-                                            match &record.state {
-                                                GameState::Decided(record_score,_) => match record_score {
-                                                    Score::Lost(in_n) => println(format!("- stored loser in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
-                                                    Score::Remis(in_n) => println(format!("- stored draw in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
-                                                    Score::Won(in_n) => println(format!("- stored winner in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
-                                                    Score::Undecided(_) => println(format!("- STORED DECIDED UNDECIDED (?) {:?} -> {}", anti_mv.data(), hash)),
-                                                }
-                                                state => println(format!("- stored undecided ({:?}) {:?} -> {}", state, anti_mv.data(), hash)),
-                                            }
-                                        } else { println(format!("- unrecorded {:?} -> {}", anti_mv.data(), hash)); }
+                            for anti_mv in anti_options.into_iter() {
+                                let anti_score = g.borrow_mut().make_shading_move(p.opponent(), Rc::clone(&anti_mv));
+                                match anti_score {
+                                    Ok((score, grayed_two)) => {
+                                        match score {
+                                            Score::Won(in_n) => println(format!("- consequent winner in {}: {:?}", in_n, anti_mv.data())),
+                                            Score::Lost(in_n) => println(format!("- consequent loser in {}: {:?}", in_n, anti_mv.data())),
+                                            Score::Remis(in_n) => println(format!("- consequent draw in {}: {:?}", in_n, anti_mv.data())),
+                                            Score::Undecided(_) => { // unclear from the bord: check game store
+                                                let hash = hash_from_game(g.clone());
+                                                if let Some(record) = (*gs).get(&hash) {
+                                                    match &record.state {
+                                                        GameState::Decided(record_score,_) => match record_score {
+                                                            Score::Lost(in_n) => println(format!("- stored loser in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                            Score::Remis(in_n) => println(format!("- stored draw in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                            Score::Won(in_n) => println(format!("- stored winner in {}: {:?} -> {}", in_n, anti_mv.data(), hash)),
+                                                            Score::Undecided(_) => println(format!("- STORED DECIDED UNDECIDED (?) {:?} -> {}", anti_mv.data(), hash)),
+                                                        }
+                                                        state => println(format!("- stored undecided ({:?}) {:?} -> {}", state, anti_mv.data(), hash)),
+                                                    }
+                                                } else { println(format!("- unrecorded {:?} -> {}", anti_mv.data(), hash)); }
+                                            },
+                                        };
+                                        g.borrow_mut().withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
                                     },
-                                },
-                                Err(_) => panic!("unexpected error in anti move"),
+                                    Err(_) => panic!("unexpected error in anti move"),
+                                }
                             }
-                            g.borrow_mut().withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
-                        }
-                                        
-                    },
+                        },
+                    };
+                    g.borrow_mut().withdraw_move_unshading(p, Rc::clone(&mv), grayed_one);
                 },
                 Err(_) => panic!("unexpected error in move"),
             }
-            g.borrow_mut().withdraw_move_unshading(p, Rc::clone(&mv));
         }
         Ok(())
     }
@@ -487,90 +490,94 @@ impl Worker {
         for mv in options.into_iter() {
             let score = cf.make_shading_move(p, Rc::clone(&mv));
             match score {
-                Ok(score) => match score {
-                    // found a winning move: immediate return
-                    Score::Won(in_n) => {
-                        cf.withdraw_move_unshading(p, Rc::clone(&mv));
-                        return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
-                    },
-                    // found an undecided move, winning is still an option: let opponent make a move
-                    Score::Undecided(_) => {
-                        let anti_options = cf.possible_moves(p.opponent());
-                        if anti_options.is_empty() { // no possible moves left: stalemate
-                            draw_moves.push((Score::Remis(1), mv.data().clone())); ;
-                        } else {
-                            let mut anti_draw_moves = Vec::<(Score,Column)>::new();
-                            let mut anti_doomed_moves = Vec::<(Score,Column)>::new();
-                            let mut anti_open_moves = Vec::<GameHash>::new();
-                            let mut anti_won = false;
+                Ok((score,grayed_one)) => {
+                    match score {
+                        // found a winning move: immediate return
+                        Score::Won(in_n) => {
+                            cf.withdraw_move_unshading(p, Rc::clone(&mv), grayed_one);
+                            return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
+                        },
+                        // found an undecided move, winning is still an option: let opponent make a move
+                        Score::Undecided(_) => {
+                            let anti_options = cf.possible_moves(p.opponent());
+                            if anti_options.is_empty() { // no possible moves left: stalemate
+                                draw_moves.push((Score::Remis(1), mv.data().clone())); ;
+                            } else {
+                                let mut anti_draw_moves = Vec::<(Score,Column)>::new();
+                                let mut anti_doomed_moves = Vec::<(Score,Column)>::new();
+                                let mut anti_open_moves = Vec::<GameHash>::new();
+                                let mut anti_won = false;
 
-                            for anti_mv in anti_options.into_iter() {
-                                let anti_score = cf.make_shading_move(p.opponent(), Rc::clone(&anti_mv));
-                                match anti_score {
-                                    Ok(score) => match score {
-                                        Score::Won(in_n) => { // opponent has a winning move: losing
-                                            doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
-                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
-                                            anti_won = true;
-                                            break;
+                                for anti_mv in anti_options.into_iter() {
+                                    let anti_score = cf.make_shading_move(p.opponent(), Rc::clone(&anti_mv));
+                                    match anti_score {
+                                        Ok((score,grayed_two)) => {
+                                            match score {
+                                                Score::Won(in_n) => { // opponent has a winning move: losing
+                                                    doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
+                                                    cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
+                                                    anti_won = true;
+                                                    break;
+                                                },
+                                                Score::Lost(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                                                Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                                                Score::Undecided(_) => { // unclear from the bord: check game store
+                                                    let hash = hash_from_state(cf.state());
+        //print!("+.");
+                                                    let gs = game_store.lock().unwrap();
+        //print!(".+");
+                                                    if let Some(record) = (*gs).get(&hash) {
+                                                        match &record.state {
+                                                            GameState::Decided(record_score,_) => match record_score {
+                                                                Score::Lost(in_n) => { // opponent can reach a lost game: losing
+                                                                    doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
+                                                                    cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
+                                                                    anti_won = true;
+                                                                    break;
+                                                                },
+                                                                Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                                                                Score::Won(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                                                                Score::Undecided(_) => { anti_open_moves.push(hash); },
+                                                            }
+                                                            _ => { anti_open_moves.push(hash); },
+                                                        }
+                                                    } else { anti_open_moves.push(hash); }
+                                                },
+                                            };
+                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
                                         },
-                                        Score::Lost(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
-                                        Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
-                                        Score::Undecided(_) => { // unclear from the bord: check game store
-                                            let hash = hash_from_state(cf.state());
-//print!("+.");
-                                            let gs = game_store.lock().unwrap();
-//print!(".+");
-                                            if let Some(record) = (*gs).get(&hash) {
-                                                match &record.state {
-                                                    GameState::Decided(record_score,_) => match record_score {
-                                                        Score::Lost(in_n) => { // opponent can reach a lost game: losing
-                                                            doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
-                                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
-                                                            anti_won = true;
-                                                            break;
-                                                        },
-                                                        Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
-                                                        Score::Won(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
-                                                        Score::Undecided(_) => { anti_open_moves.push(hash); },
-                                                    }
-                                                    _ => { anti_open_moves.push(hash); },
-                                                }
-                                            } else { anti_open_moves.push(hash); }
-                                        },
-                                    },
-                                    Err(_) => panic!("unexpected error in anti move"),
+                                        Err(_) => panic!("unexpected error in anti move"),
+                                    }
                                 }
-                                cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
-                            }
 
-                            if anti_won {
-                                // doomed_moves.push(anti_won_move);
-                            } else if !anti_open_moves.is_empty() { // best opponent move is undecided
-                                for interesting_hash in anti_open_moves.into_iter() {
-                                    open_moves.push(interesting_hash);
+                                if anti_won {
+                                    // doomed_moves.push(anti_won_move);
+                                } else if !anti_open_moves.is_empty() { // best opponent move is undecided
+                                    for interesting_hash in anti_open_moves.into_iter() {
+                                        open_moves.push(interesting_hash);
+                                    }
+                                } else if !anti_draw_moves.is_empty() { // best opponent move leads to a draw
+                                    let (score, _) = anti_draw_moves.first().unwrap();
+                                    if let Score::Remis(in_n) = score {
+                                        draw_moves.push((Score::Remis(in_n+1), mv.data().clone()));
+                                    }
+                                } else if !anti_doomed_moves.is_empty() { // opponent can only lose
+                                    let (score, _) = anti_doomed_moves.first().unwrap();
+                                    if let Score::Lost(in_n) = score {
+                                        cf.withdraw_move_unshading(p, Rc::clone(&mv), grayed_one);
+                                        return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
+                                    }
                                 }
-                            } else if !anti_draw_moves.is_empty() { // best opponent move leads to a draw
-                                let (score, _) = anti_draw_moves.first().unwrap();
-                                if let Score::Remis(in_n) = score {
-                                    draw_moves.push((Score::Remis(in_n+1), mv.data().clone()));
-                                }
-                            } else if !anti_doomed_moves.is_empty() { // opponent can only lose
-                                let (score, _) = anti_doomed_moves.first().unwrap();
-                                if let Score::Lost(in_n) = score {
-                                    cf.withdraw_move_unshading(p, Rc::clone(&mv));
-                                    return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
-                                }
-                            }
 
-                        }
-                    },
-                    Score::Remis(in_n) => { draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
-                    Score::Lost(in_n) => { doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                            }
+                        },
+                        Score::Remis(in_n) => { draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                        Score::Lost(in_n) => { doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                    };
+                    cf.withdraw_move_unshading(p, Rc::clone(&mv), grayed_one);
                 },
                 Err(_) => panic!("unexpected error in move"),
             }
-            cf.withdraw_move_unshading(p, Rc::clone(&mv));
         }
 
         // if there is a winning move, it was returned already

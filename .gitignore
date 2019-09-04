@@ -1,5 +1,7 @@
+*~
 *.swp
 *.code-workspace
 **/*.rs.bk
 Cargo.lock
 target
+strdmp
