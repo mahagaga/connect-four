@@ -2,7 +2,7 @@
 use generic::{Game,Move,Player,Score,Strategy,Withdraw};
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::cmp::{max, min};
+use std::cmp::{min};
 
 //#################################################################################################
 // specifically Connect Four
@@ -94,18 +94,10 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
 
     fn withdraw_move(&mut self, _p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
-//        let m = self.field[n].len();
-//        if 0 == m {
-//            // column is obviously already empty
-//            Err(Withdraw::NotAllowed)
-//        } else {
-
-            // un-drop the stone
-            self.field[n].pop();
-                        
-//            // return the score
-//            self.get_score(p, n, m)
-//        }
+        // un-drop the stone
+        if let None = self.field[n].pop() {
+            panic!("there should be a stone at column {:?}", mv.data());
+        }
     }
 
     fn display(&self) -> String {
@@ -440,42 +432,34 @@ impl ConnectFour {
     
     pub fn withdraw_move_unshading(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
-        let m = self.field[n].len()-1;
-//println!("withdraw: {} {}", n,m);
-        if 0 == m {
-            // column is obviously already empty
-//            Err(Withdraw::NotAllowed)
-        } else {
+        let m = self.field[n].len()-1; // this is meant to panic if there is no stone
+        // un-drop the stone
+        self.field[n].pop();
 
-            // un-drop the stone
-            self.field[n].pop();
-
-            // identify undead stones, possibly killed by this move
-            let ungrayable = self.get_influence_range(n,m)
-                .into_iter()
-                // prefilter by color - smart?
-                .filter(|(p,o)| {
-                    match self.field[*p].get(*o) {
-                        // save energy
-                        Some(Some(Player::Gray)) => true,
-                        x => false, //{ println!("f {} {} {:?}", p, o, x); false },
-                    }
-                })
-                // collect cells that were perhaps killed by this move
-                .filter(|(a,b)| {
+        // identify undead stones, possibly killed by this move
+        let ungrayable = self.get_influence_range(n,m)
+            .into_iter()
+            // prefilter by color - smart?
+            .filter(|(p,o)| {
+                match self.field[*p].get(*o) {
+                    // save energy
+                    Some(Some(Player::Gray)) => true,
+                    _x => false, //{ println!("f {} {} {:?}", p, o, _x); false },
+                }
+            })
+            // collect cells that were perhaps killed by this move
+            .filter(|(a,b)| {
 //println!("is it dead? {} {} {}", a, b, p);
-                    !self.is_dead(a,b,p)
-                })
-                .collect::<Vec<(usize,usize)>>();
+                !self.is_dead(a,b,p)
+            })
+            .collect::<Vec<(usize,usize)>>();
 //println!("ungrayble: {:?}", ungrayable);
-            // turn them back in the game
-            ungrayable.into_iter().for_each(|(a,b)| {
-                self.field[a][b] = Some(p.opponent().clone());
-            });
-
-
-//            Ok(())      
-        }
+        // turn them back in the game
+        ungrayable.into_iter().for_each(|(a,b)| {
+println!("ungray {} {} {:?}\n{}", n, m, p, self.display());
+            self.field[a][b] = Some(p.opponent().clone());
+println!("->\n{}", self.display());
+        });
     }
 }
 

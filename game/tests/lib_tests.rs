@@ -500,26 +500,6 @@ o
 
 ------");
 
-    // with no wisdom
-    let g = Rc::new(RefCell::new(game.clone()));
-    let toplimit = 0;
-
-    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
-        (Some(mv), Some(score)) => {
-            assert!(Column::Three == *mv.data());
-            if let Score::Won(n) = score { assert!(n == 2); }
-            else { assert!(false); }
-
-            let dump = std::fs::read_to_string(STRDMP).unwrap();
-            let expected = std::fs::read_to_string("tests/data/toplimit0").unwrap();
- //           assert!(dump == expected,
-                    std::fs::write("tests/data/toplimit0~", dump)
-                    //)
-                    ;
-        },
-        _ => { assert!(false); },
-    };
-
     // with some wisdom
     let g = Rc::new(RefCell::new(game.clone()));
     let toplimit = 4;
@@ -538,12 +518,28 @@ o
         _ => { assert!(false); },
     };
 
+    // with no wisdom
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit0").unwrap();
+            assert!(dump == expected,
+                std::fs::write("tests/data/toplimit0~", dump).unwrap()
+            );
+        },
+        _ => { assert!(false); },
+    };
 }
 
 #[test]
 fn test_graying() {
-    let nworker = 1;
-   
     let expected_before_move_six ="------
 
 xo
@@ -581,11 +577,11 @@ ox
     assert!(hash == expected_hash);
     assert!(hash == 42502451267743730655232, "{} is not 42502451267743730655232", hash);
 
-return;
     // at last check shading in action
     let g = Rc::new(RefCell::new(game.clone()));
     let toplimit = 0;
-
+    let nworker = 1;
+   
     let player = Player::Black;
     let strategy = BruteForceStrategy::new(nworker);
  
@@ -599,8 +595,7 @@ return;
             let expected = std::fs::read_to_string("tests/data/shading").unwrap();
             assert!(dump == expected, dump);
         },
-        _ => {
-            assert!(false); },
+        _ => { assert!(false); },
     };
 
 }

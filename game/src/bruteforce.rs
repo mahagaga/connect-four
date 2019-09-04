@@ -490,7 +490,7 @@ impl Worker {
                 Ok(score) => match score {
                     // found a winning move: immediate return
                     Score::Won(in_n) => {
-                        cf.withdraw_move(p, Rc::clone(&mv));
+                        cf.withdraw_move_unshading(p, Rc::clone(&mv));
                         return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
                     },
                     // found an undecided move, winning is still an option: let opponent make a move
@@ -510,7 +510,7 @@ impl Worker {
                                     Ok(score) => match score {
                                         Score::Won(in_n) => { // opponent has a winning move: losing
                                             doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
-                                            cf.withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
                                             anti_won = true;
                                             break;
                                         },
@@ -526,7 +526,7 @@ impl Worker {
                                                     GameState::Decided(record_score,_) => match record_score {
                                                         Score::Lost(in_n) => { // opponent can reach a lost game: losing
                                                             doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
-                                                            cf.withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
                                                             anti_won = true;
                                                             break;
                                                         },
@@ -541,7 +541,7 @@ impl Worker {
                                     },
                                     Err(_) => panic!("unexpected error in anti move"),
                                 }
-                                cf.withdraw_move(p.opponent(), Rc::clone(&anti_mv));
+                                cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv));
                             }
 
                             if anti_won {
@@ -558,7 +558,7 @@ impl Worker {
                             } else if !anti_doomed_moves.is_empty() { // opponent can only lose
                                 let (score, _) = anti_doomed_moves.first().unwrap();
                                 if let Score::Lost(in_n) = score {
-                                    cf.withdraw_move(p, Rc::clone(&mv));
+                                    cf.withdraw_move_unshading(p, Rc::clone(&mv));
                                     return (GameState::Decided(Score::Won(in_n+1), Some(mv.data().clone())), vec![]);
                                 }
                             }
@@ -570,7 +570,7 @@ impl Worker {
                 },
                 Err(_) => panic!("unexpected error in move"),
             }
-            cf.withdraw_move(p, Rc::clone(&mv));
+            cf.withdraw_move_unshading(p, Rc::clone(&mv));
         }
 
         // if there is a winning move, it was returned already
