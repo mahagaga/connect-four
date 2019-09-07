@@ -74,7 +74,11 @@ o
     let plan = match a {
         Some(path) => match std::fs::read_to_string(path) {
             Err(_) =>  {
-                return game_from_hash(default_int(a, 0) as i128);
+                let h = match path.parse::<i128>() {
+                    Ok(u) => u,
+                    Err(_) => panic!("{} neither file nor hash.", path),
+                };
+                return game_from_hash(h);
             },
             Ok(string) => string,
         },
@@ -83,7 +87,7 @@ o
             String::from(default)
         },
     };
-    replicate_game(&plan[..])
+    ConnectFour::replicate_game(&plan[..])
 }
 
 fn main() {
@@ -91,18 +95,20 @@ fn main() {
 
     let nworker = default_int(args.get(3), 3);
     let toplimit = default_int(args.get(4), 4) as i32;
+    let game = read_game_from_file(args.get(1));
+
     let player = match &args.get(2) {
         Some(p) =>  {
             match &p[..] {
                 "black" => Player::Black,
                 "white" => Player::White,
+                "show" => { println!("{}",game.display()); return; }
                 _ => panic!("{} neither black nor white. you are black then.", p),
             }
         },
         None => Player::Black,
     };
     
-    let game = read_game_from_file(args.get(1));
     let games = [game,];
     let _timep = games.iter()
     .map(|game| {
@@ -115,25 +121,4 @@ fn main() {
     .collect::<Vec<_>>();
 }
 
-fn replicate_game(plan: &str) -> ConnectFour {
-    let mut g = ConnectFour::new();
-    for (i, line) in plan.split("\n").enumerate() {
-        match i {
-            b if (b > 0 && b < 8) => {
-                for c in line.chars() {
-                    g.drop_stone(
-                        match c {
-                            'x' => &Player::Black,
-                            'o' => &Player::White,
-                            what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
-                        },
-                        Column::from_usize(i-1)
-                    ).unwrap(); 
-                }
-            },
-            c if (c==0 || c ==8) => assert_eq!(line, "------"),
-            _ => (),
-        }
-    }
-    g
-}
+

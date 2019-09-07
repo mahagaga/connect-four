@@ -1,6 +1,7 @@
 extern crate game;
 use game::connectfour::*;
 use game::generic::*;
+use game::bruteforce::*;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -479,4 +480,160 @@ fn replicate_game(plan: &str) -> ConnectFour {
         }
     }
     g
+}
+
+#[test]
+fn test_bruteforce() {
+
+    let nworker = 1;
+    let player = Player::Black;
+
+    let strategy = BruteForceStrategy::new(nworker);
+    
+    let game = ConnectFour::replicate_game("------
+
+x
+
+xo
+
+o
+
+------");
+
+    // with some wisdom
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 4;
+    
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit4").unwrap();
+            assert!(dump == expected,
+                    std::fs::write("tests/data/toplimit4~", dump));
+        },
+        _ => { assert!(false); },
+    };
+
+    // with no wisdom
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit0").unwrap();
+            assert!(dump == expected,
+                std::fs::write("tests/data/toplimit0~", dump).unwrap()
+            );
+        },
+        _ => { assert!(false); },
+    };
+}
+
+#[test]
+fn test_graying_1() {
+    let expected_before_move_six ="------
+
+xo
+
+xo
+
+o
+ox
+------";
+    let expected_after_move_six = "------
+
+xo
+
+xo
+
+ox
+:x
+------";
+    let game = ConnectFour::replicate_game(expected_before_move_six);
+    let mut mg = game.clone();
+    let (_score,grayed) = mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six })).unwrap();
+    assert!(mg.display().eq(expected_after_move_six), mg.display());
+   
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_six).state());
+    assert!(hash == expected_hash);
+    assert!(hash == 51956407605519875858432, "{} is not 51956407605519875858432", hash);
+
+    // undo
+    mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }), grayed);
+    assert!(mg.display().eq(expected_before_move_six), mg.display());
+   
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_six).state());
+    assert!(hash == expected_hash);
+    assert!(hash == 42502451267743730655232, "{} is not 42502451267743730655232", hash);
+
+    // at last check shading in action
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+    let nworker = 1;
+   
+    let player = Player::Black;
+    let strategy = BruteForceStrategy::new(nworker);
+ 
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Three == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/shading").unwrap();
+            assert!(dump == expected, dump);
+        },
+        _ => { assert!(false); },
+    };
+
+}
+
+#[test]
+fn test_graying_2() {
+    let expected_before_move_two ="------
+oxox
+x
+
+xo
+
+o
+
+------";
+    let expected_after_move_two = "------
+:xox
+xx
+
+xo
+
+o
+
+------";
+    let game = ConnectFour::replicate_game(expected_before_move_two);
+    let mut mg = game.clone();
+    let (_score,grayed) = mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Two })).unwrap();
+    assert!(mg.display().eq(expected_after_move_two), mg.display());
+
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_two).state());
+    assert!(hash == expected_hash);
+
+    // undo
+    mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Two }), grayed);
+    assert!(mg.display().eq(expected_before_move_two), mg.display());
+
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_two).state());
+    assert!(hash == expected_hash);
 }

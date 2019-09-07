@@ -2,7 +2,7 @@
 use generic::{Game,Move,Player,Score,Strategy,Withdraw};
 use std::rc::Rc;
 use std::cell::RefCell;
-
+use std::cmp::{min};
 
 //#################################################################################################
 // specifically Connect Four
@@ -78,22 +78,26 @@ impl Game<Column,Vec<Vec<Option<Player>>>> for ConnectFour {
 
     fn make_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<Score, Withdraw> {
         let n = mv.data().to_usize();
-        if ConnectFour::height() == self.field[n].len() {
+        let m = self.field[n].len();
+        if ConnectFour::height() == m {
             // column is obviously already filled to the top
             Err(Withdraw::NotAllowed)
         } else {
-            self.field[n].push(match p {
-                Player::White => Some(Player::White),
-                Player::Black => Some(Player::Black),
-                Player::Gray => Some(Player::Gray),                
-            });
-            self.get_score(p, n, self.field[n].len()-1)
+            // drop the stone
+            self.field[n].push(Some(p.clone()));
+            
+            
+            // return the score
+            self.get_score(p, n, m)
         }
     }
 
     fn withdraw_move(&mut self, _p: &Player, mv: Rc<dyn Move<Column>>) {
         let n = mv.data().to_usize();
-        self.field[n].pop();
+        // un-drop the stone
+        if let None = self.field[n].pop() {
+            panic!("there should be a stone at column {:?}", mv.data());
+        }
     }
 
     fn display(&self) -> String {
@@ -163,12 +167,36 @@ impl ConnectFour {
         cf
     }
 
+    pub fn replicate_game(plan: &str) -> Self {
+        let mut g = ConnectFour::new();
+        for (i, line) in plan.split("\n").enumerate() {
+            match i {
+                b if (b > 0 && b < 8) => {
+                    for c in line.chars() {
+                        g.drop_stone(
+                            match c {
+                                'x' => &Player::Black,
+                                'o' => &Player::White,
+                                ':' => &Player::Gray,
+                                what => { println!("{}, {}", what, i); assert!(false); &Player::Black },
+                            },
+                            Column::from_usize(i-1)
+                        ).unwrap(); 
+                    }
+                },
+                c if (c==0 || c ==8) => assert_eq!(line, "------"),
+                _ => (),
+            }
+        }
+        g
+    }
+
     fn get_score(&self, p: &Player, n: usize, m: usize) -> Result<Score, Withdraw> {
 
         // vertical
         let below = self.matching_distance(vec![n,n,n], m, Step::Down, p);
         if below >= 3 {
-            //println!("{} below {}", below, m);
+//println!("{} below {}", below, m);
             return Ok(Score::Won(0))
         }
 
@@ -178,7 +206,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Plane, p);
         if left + right >= 3 {
-            //println!("left {}, right {}", left, right);
+//println!("left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -188,7 +216,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Down, p);
         if left + right >= 3 {
-            //println!("\\left {}, right {}", left, right);
+//println!("\\left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -198,7 +226,7 @@ impl ConnectFour {
         let iter:Vec<usize> = (n+1..self.field.len()).collect();
         let left = self.matching_distance(iter, m, Step::Up, p);
         if left + right >= 3 {
-            //println!("/left {}, right {}", left, right);
+//println!("/left {}, right {}", left, right);
             return Ok(Score::Won(0))
         }
 
@@ -232,7 +260,7 @@ impl ConnectFour {
             match &self.field[i][j] {
                 Some(cp) => {
                     if *cp == *p {
-                        //println!("{} {} matches, dist {} up", i, j, distance);
+//println!("{} {} matches, dist {} up", i, j, distance);
                         distance += 1;
                     } else {
                         break;
@@ -261,6 +289,189 @@ impl ConnectFour {
             }
         }
         false
+    }
+
+    fn get_influence_range(&self, n:usize, m:usize) -> Vec<(usize,usize)>{
+        let n = n as i8;
+        let m = m as i8;
+        let mut x = Vec::new();
+        for i in 1..4 {
+            x.push((n, m-i));
+            x.push((n, m+i));
+            x.push((n-i, m-i));
+            x.push((n-i, m));
+            x.push((n-i, m+i));
+            x.push((n+i, m-i));
+            x.push((n+i, m));
+            x.push((n+i, m+i));
+        }
+        x.into_iter()
+         .filter(|(a,b)| { *a>=0 && *a< ConnectFour::width() as i8
+                        && *b>=0 && *b< ConnectFour::height() as i8})
+         .map(|(a,b)| { (a as usize, b as usize) })
+         .collect()
+    }
+
+    fn is_dead(&self, n:&usize, m:&usize, tabu:&Player) -> bool {
+        let h = ConnectFour::height();
+        let w = ConnectFour::width();
+
+        let killer = |x:&Option<Player>| -> bool {
+            match x {
+                None => false,
+                Some(color) => {
+                    if color == tabu { true }
+                    else { false }
+                },
+            }
+        };
+
+        let count_options = |n:usize,m:usize,dn:i8,dm:i8| -> i8 {
+//if n==6 && m==0 {
+//    println!("{} {} {} {}", n,m,dn,dm);
+//}
+            let mut maxl=0;
+            let mut distance = match dn {
+                1 => min(4, w-n),
+                -1 => min(4, n+1),
+                0 => 4,
+                _ => panic!("???"),
+            };
+            distance = match dm {
+                1 => min(distance, h-m),
+                -1 => min(distance, m+1),
+                0 => distance,
+                _ => panic!("???"),
+            };
+//print!("{}", distance);
+            for i in 1..distance {
+                let nl = (n as i8+(i as i8)*dn) as usize;
+                let ml = (m as i8+(i as i8)*dm) as usize;
+                
+                match self.field[nl].get(ml) {
+                    Some(field) => {
+                        if killer(&field) { 
+//print!(" killer {:?} {} {}", field, nl, ml);
+                            break;
+                        }
+                        else { maxl=maxl+1; }
+                    },
+                    None => { maxl=maxl+1; },
+                }
+            }
+//println!(" {}", maxl);
+            maxl
+        };           
+
+        //horizontal
+        let mut maxl = 1;
+        maxl += count_options(*n,*m,1,0);
+        maxl += count_options(*n,*m,-1,0);
+        if maxl >= 4 { return false; }
+
+        //vertical
+        let mut maxl = 1;
+        maxl += count_options(*n,*m,0,1);
+        maxl += count_options(*n,*m,0,-1);
+        if maxl >= 4 { return false; }
+
+        //diagonal '/'
+        let mut maxl = 1;
+        maxl += count_options(*n,*m,1,1);
+        maxl += count_options(*n,*m,-1,-1);
+        if maxl >= 4 { return false; }
+        
+        //diagonal '\'
+        let mut maxl = 1;
+        maxl += count_options(*n,*m,-1,1);
+        maxl += count_options(*n,*m,1,-1);
+        if maxl >= 4 { return false; }
+
+        true
+    }
+
+    pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<(Score, Vec<(usize,usize)>), Withdraw> {
+        let n = mv.data().to_usize();
+        let m = self.field[n].len();
+        if ConnectFour::height() == m {
+            // column is obviously already filled to the top
+            Err(Withdraw::NotAllowed)
+        } else {
+            // drop the stone
+            self.field[n].push(match p {
+                Player::White => Some(Player::White),
+                Player::Black => Some(Player::Black),
+                Player::Gray => Some(Player::Gray),                
+            });
+
+            let grayable = self.get_influence_range(n,m)
+                .into_iter()
+                // prefilter by color - smart?
+                .filter(|(q,o)| {
+                    match self.field[*q].get(*o) {
+                        // save energy
+                        Some(Some(pc)) => pc == p.opponent(),
+                        _ => false,
+                    }
+                })
+                // identify dead stones, killed by this move
+                .filter(|(a,b)| {
+                    self.is_dead(a,b,p)
+                })
+                .collect::<Vec<(usize,usize)>>();
+
+            // turn them gray
+            let grayable = grayable.into_iter().map(|(a,b)| {
+                self.field[a][b] = Some(Player::Gray);
+                (a,b)
+            }).collect();
+            // return the score
+            let s = self.get_score(p, n, m);
+//1: looking for lost balance
+// assert abs(#b?=-#p - #w?=-#p) <= 1 + #g
+//1 let nb:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Black) })}.count() as i8).sum();
+//1 let nw:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::White) })}.count() as i8).sum();
+//1 let ng:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Gray) })}.count() as i8).sum();
+//1 if i8::abs(nb - nw + match *p { Player::Black => -1, Player::White => 1, Player::Gray => 0, }) > 1 + ng { 
+//1    println!("oops\n{} {} {} {:?}\n{}", nb, nw, ng, &p, self.display());
+//1    panic!("so wrong")
+//1 }
+//1:
+            match s {
+                Err(withdraw) => Err(withdraw),
+                Ok(score) => Ok((score, grayable)),
+            }
+        }
+    }
+    
+    pub fn withdraw_move_unshading(&mut self,
+            p: &Player,
+            mv: Rc<dyn Move<Column>>,
+            ungrayable: Vec<(usize,usize)>) {
+        let n = mv.data().to_usize();
+        if self.field[n].len() == 0 {
+            panic!("there is no stone to be un-moved");
+        }
+
+        // un-drop the stone
+        self.field[n].pop();
+
+        // turn them back in the game
+        ungrayable.into_iter().for_each(|(a,b)| {
+//println!("ungray {} {} {:?}\n{}", n, m, p, self.display());
+            self.field[a][b] = Some(p.opponent().clone());
+//println!("->\n{}", self.display());
+        });
+//1: looking for lost balance
+// assert abs(#b?=+#p - #w?=+#p) <= 1 + #g
+//1 let nb:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Black) })}.count() as i8).sum();
+//1 let nw:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::White) })}.count() as i8).sum();
+//1 let ng:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Gray) })}.count() as i8).sum();
+//1 if i8::abs(nb - nw + match *p { Player::Black => 1, Player::White => -1, Player::Gray => 0, }) > 1 + ng { 
+//1    println!("arh?\n{} {} {} {:?}\n{}", nb, nw, ng, &p, self.display());
+//1    panic!("so wrong")
+//1 }
+//:1
     }
 }
 
