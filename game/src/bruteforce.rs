@@ -34,7 +34,7 @@ pub fn hash_from_state(state:&Vec<Vec<Option<Player>>>) -> GameHash {
                 Some(p) => match p {
                     Player::White => { s += 1 * f; },
                     Player::Black => { s += 2 * f; },
-                    Player::Gray => { s += 2 * f; },
+                    Player::Gray => { s += 3 * f; },
                 },
                 None => (),
             }
@@ -348,8 +348,17 @@ thread::spawn(move|| {
         workers.push(Worker::spawn_worker(i, itx.clone(), moves_ahead, game_store.clone()));
     }
 
+//2: print out some interests
+//2 let mut job_counter = 0;
+//2:
     loop {
         if let Ok(interest) = interests.recv() {
+//2:
+//2 job_counter += 1;
+//2 if job_counter%10 == 0 {
+//2    println!("{}\t{}\t{}\t{:?}", interest_store.len(), game_store.lock().unwrap().len(), job_counter, interest.interesting);
+//2 }
+//2:
             match (interest.interesting, interest.interested) {
                 // worker has finished job
                 (None, Some(interested)) => {
@@ -486,7 +495,9 @@ impl Worker {
         let mut draw_moves = Vec::<(Score,Column)>::new();
         let mut doomed_moves = Vec::<(Score,Column)>::new();
         let mut open_moves = Vec::<GameHash>::new();
-
+//1:
+//1 println!("2mai\t{}", game_hash);
+//1:
         for mv in options.into_iter() {
             let score = cf.make_shading_move(p, Rc::clone(&mv));
             match score {
@@ -579,7 +590,13 @@ impl Worker {
                 Err(_) => panic!("unexpected error in move"),
             }
         }
-
+//1:
+// assert hash(cf) = hash
+//1 if game_hash != hash_from_state(cf.state()) {
+//1     println!("this went wrong\n{}", cf.display());
+//1     panic!("corruption");
+//1 } else { println!("{}", cf.display()); }
+//1:
         // if there is a winning move, it was returned already
         if !open_moves.is_empty() { // best move is yet undecided
             return (GameState::Undecided, open_moves);

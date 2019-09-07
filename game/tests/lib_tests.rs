@@ -539,7 +539,7 @@ o
 }
 
 #[test]
-fn test_graying() {
+fn test_graying_1() {
     let expected_before_move_six ="------
 
 xo
@@ -566,7 +566,7 @@ ox
     let hash = hash_from_state(mg.state());
     let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_six).state());
     assert!(hash == expected_hash);
-    assert!(hash == 47234041122650230644736, "{} is not 47234041122650230644736", hash);
+    assert!(hash == 51956407605519875858432, "{} is not 51956407605519875858432", hash);
 
     // undo
     mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }), grayed);
@@ -600,3 +600,40 @@ ox
 
 }
 
+#[test]
+fn test_graying_2() {
+    let expected_before_move_two ="------
+oxox
+x
+
+xo
+
+o
+
+------";
+    let expected_after_move_two = "------
+:xox
+xx
+
+xo
+
+o
+
+------";
+    let game = ConnectFour::replicate_game(expected_before_move_two);
+    let mut mg = game.clone();
+    let (_score,grayed) = mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Two })).unwrap();
+    assert!(mg.display().eq(expected_after_move_two), mg.display());
+
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_two).state());
+    assert!(hash == expected_hash);
+
+    // undo
+    mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Two }), grayed);
+    assert!(mg.display().eq(expected_before_move_two), mg.display());
+
+    let hash = hash_from_state(mg.state());
+    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_two).state());
+    assert!(hash == expected_hash);
+}

@@ -425,9 +425,18 @@ impl ConnectFour {
                 self.field[a][b] = Some(Player::Gray);
                 (a,b)
             }).collect();
-
             // return the score
             let s = self.get_score(p, n, m);
+//1: looking for lost balance
+// assert abs(#b?=-#p - #w?=-#p) <= 1 + #g
+//1 let nb:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Black) })}.count() as i8).sum();
+//1 let nw:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::White) })}.count() as i8).sum();
+//1 let ng:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Gray) })}.count() as i8).sum();
+//1 if i8::abs(nb - nw + match *p { Player::Black => -1, Player::White => 1, Player::Gray => 0, }) > 1 + ng { 
+//1    println!("oops\n{} {} {} {:?}\n{}", nb, nw, ng, &p, self.display());
+//1    panic!("so wrong")
+//1 }
+//1:
             match s {
                 Err(withdraw) => Err(withdraw),
                 Ok(score) => Ok((score, grayable)),
@@ -453,6 +462,16 @@ impl ConnectFour {
             self.field[a][b] = Some(p.opponent().clone());
 //println!("->\n{}", self.display());
         });
+//1: looking for lost balance
+// assert abs(#b?=+#p - #w?=+#p) <= 1 + #g
+//1 let nb:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Black) })}.count() as i8).sum();
+//1 let nw:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::White) })}.count() as i8).sum();
+//1 let ng:i8 = self.field.iter().map(|c| { c.into_iter().filter(|x| { **x==Some(Player::Gray) })}.count() as i8).sum();
+//1 if i8::abs(nb - nw + match *p { Player::Black => 1, Player::White => -1, Player::Gray => 0, }) > 1 + ng { 
+//1    println!("arh?\n{} {} {} {:?}\n{}", nb, nw, ng, &p, self.display());
+//1    panic!("so wrong")
+//1 }
+//:1
     }
 }
 
