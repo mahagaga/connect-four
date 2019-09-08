@@ -72,11 +72,13 @@ fn game_from_hash(hash:GameHash) -> ConnectFour {
 pub struct GameRecord {
     state: GameState,
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum GameState {
     Locked,
     Decided(Score, Option<Column>),
     Undecided,
+    Novel,
+    Recall,
 }
 pub struct BruteForceStrategy {
     pub nworkers: usize,
@@ -232,6 +234,7 @@ pub struct Interest {
     interested: Option<GameHash>,
     interesting: Option<GameHash>,
     worker_id: Option<usize>,
+    record: Option<GameState>,
 }
 
 use std::path::Path;
@@ -349,49 +352,63 @@ thread::spawn(move|| {
     }
 
 //2: print out some interests
-//2 let mut job_counter = 0;
+/*2*/let mut job_counter = 0;
 //2:
     loop {
         if let Ok(interest) = interests.recv() {
 //2:
-//2 job_counter += 1;
-//2 if job_counter%10 == 0 {
-//2    println!("{}\t{}\t{}\t{:?}", interest_store.len(), game_store.lock().unwrap().len(), job_counter, interest.interesting);
-//2 }
+/*2*/job_counter += 1;
+/*2*/if job_counter%1000000 == 0 {
+/*2*/   println!("{}\t{}\t{}\t{:?}", interest_store.len(), game_store.lock().unwrap().len(), job_counter, interest.interesting);
+/*2*/}
 //2:
-            match (interest.interesting, interest.interested) {
+            match (interest.interesting, interest.interested, interest.record) {
                 // worker has finished job
-                (None, Some(interested)) => {
+                (None, Some(_), None) => panic!("if job is done a verdict is expected"),
+                (None, Some(interested), Some(newstate)) => {
                     // note changed job pendencies
                     let worker_id = interest.worker_id.unwrap();
                     workers.get_mut(worker_id).unwrap().pending_jobs -= 1;
 
                     // submit new jobs if this game is decided now
                     let finished = interested;
-                    let record;
                     {
 //print!("+:");
-                        let gst = game_store.lock().unwrap();
-                        record = match (*gst).get(&finished) {
+                        let mut gst = game_store.lock().unwrap();
+                        match (*gst).get(&finished) {
                             Some(x) => {
                                 match &x.state {
-                                    GameState::Decided(score, column) => Some((score.clone(), column.clone())),
-                                    GameState::Locked => {
-// debug
-//println!("{} must have been picked up again already", &finished);
-//
-                                        None
-                                    }
-                                    GameState::Undecided => None,
+                                    GameState::Decided(score, column) => panic!("unexpected state for {}: Decided({:?}, {:?})", &finished, score, column),
+                                    GameState::Undecided => panic!("unexpected state for {}: Undecided", &finished),
+                                    _ => (*gst).insert(finished, GameRecord{state: newstate.clone(),}),
                                 }
                             },
-                            None => panic!("game should have a record!"),
+                            None => panic!("game {} should have a record!", &finished),
                         };
 //print!(":+"); 
                     }
-                    if let Some((score, column)) = record {
+                    if let GameState::Decided(score,column) = newstate {
                         if let Some(parents) = interest_store.remove(&finished) {
                             for jobhash in parents.into_iter() {
+
+                                let call = {
+                                    let mut gs = game_store.lock().unwrap();
+                                    match (*gs).get(&jobhash) {
+                                        None => {
+                                            (*gs).insert(jobhash, GameRecord{state: GameState::Novel,});
+                                            true
+                                        },
+                                        Some(record) => match record.state {
+                                            GameState::Locked => panic!("shouldn't be locked"),
+                                            GameState::Undecided => {
+                                                (*gs).insert(jobhash, GameRecord{state: GameState::Recall,});
+                                                true
+                                            },
+                                            _ => false,
+                                        },
+                                    }
+                                };
+                                if !call { continue; }
                                 let wid = (&workers).into_iter()
                                     .min_by_key(|w| w.pending_jobs).unwrap().id;
                                 let worker = workers.get_mut(wid).unwrap();
@@ -429,30 +446,66 @@ thread::spawn(move|| {
                     }
                 },
                 // claimed interest
-                (Some(interesting), parent) => {
-                    if let Some(interested) = parent {
-                        if let Some(record) = interest_store.get_mut(&interesting) {
-                            // here, a HashSet would certainly be useful instead of a Vector
-                            // but since memory is the likely bottleneck AND it's assumed that vectors are smaller...
-                            if record.into_iter().all(|h| {*h!=interested}) {
-                                record.push(interested);
+                (Some(_), _, Some(_)) => panic!("if a job is requested no verdict is expected"),
+                (Some(interesting), parent, None) => {
+                    let (call, claim) = {
+                        let mut gs = game_store.lock().unwrap();
+                        match (*gs).get(&interesting) {
+                            None => {
+                                (*gs).insert(interesting, GameRecord{state: GameState::Novel,});
+                                (true, true)
+                            },
+                            Some(record) => match record.state {
+                                GameState::Novel => (false, true),
+                                GameState::Recall => (false, true),
+                                GameState::Locked => panic!("shouldn't be locked"),
+                                GameState::Undecided => {
+                                    (*gs).insert(interesting, GameRecord{state: GameState::Recall,});
+                                    (true, true)
+                                },
+                                GameState::Decided(_,_) => {
+                                    // e.g. if it was on Recall and just got Decided, claiming an interest is no good anymore
+                                    // claim an interest the interested itself instead, to make sure the interested is recalled once it's done
+                                    if let Some(interested) = parent {
+                                        if let Some(record) = interest_store.get_mut(&interested) {
+                                            // here, a HashSet would certainly be useful instead of a Vector
+                                            // but since memory is the likely bottleneck AND it's assumed that vectors are smaller...
+                                            if record.into_iter().all(|h| {*h!=interested}) {
+                                                record.push(interested);
+                                            }
+                                        } else {
+                                            interest_store.insert(interested, vec![interested]);
+                                        }
+                                    }
+                                    (false, false)
+                                },
+                            },
+                        }
+                    };
+                    if claim {
+                        if let Some(interested) = parent {
+                            if let Some(record) = interest_store.get_mut(&interesting) {
+                                // here, a HashSet would certainly be useful instead of a Vector
+                                // but since memory is the likely bottleneck AND it's assumed that vectors are smaller...
+                                if record.into_iter().all(|h| {*h!=interested}) {
+                                    record.push(interested);
+                                }
+                            } else {
+                                interest_store.insert(interesting, vec![interested]);
                             }
-                        } else {
-                            interest_store.insert(interesting, vec![interested]);
                         }
                     }
-                    let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
-                    let worker = workers.get_mut(wid).unwrap();
-                    match worker.job_box.send((interesting, player.clone())) {
-                        Err(_e) => (),
-//debug
-//println!("cannot submit new job to {} ({}). worker has quit?", worker.id, _e),
-//
-                        Ok(_) => (),
-                    };
-                    worker.pending_jobs += 1;
+                    if call {
+                        let wid = (&workers).into_iter().min_by_key(|w| w.pending_jobs).unwrap().id;
+                        let worker = workers.get_mut(wid).unwrap();
+                        match worker.job_box.send((interesting, player.clone())) {
+                            Err(_e) => println!("cannot submit new job to {} ({}). worker has quit?", worker.id, _e),
+                            Ok(_) => (),
+                        };
+                        worker.pending_jobs += 1;
+                    }
                 },
-                (None, None) => panic!("doesn't make sense"),
+                (None, None, _) => panic!("doesn't make sense"),
             }         
         }
     }
@@ -469,6 +522,7 @@ thread::spawn(move|| {
             interesting:Some(hash),
             interested:None,
             worker_id:None,
+            record:None,
         }).unwrap();
     }
 }
@@ -639,6 +693,7 @@ impl Worker {
                 interested: Some(parent_hash),
                 interesting: Some(ih),
                 worker_id: None,
+                record: None,
             }
         }).map(|im| {
             match interest_sender.send(im) {
@@ -656,98 +711,64 @@ impl Worker {
             moves_ahead:i32,
             interest:&Sender<Interest>,
             hash:GameHash,
-            p:&Player) {
+            p:&Player) -> Result<GameState,String> {
         match Worker::lock_hash(&game_store, hash) {
             // 0. quit job if game is locked or decided
-            Err(_) => return (),
+            Err(message) => {
+                println!("{}", message);
+                return Err(message);
+            },
             Ok(new) => { // new game, never simulated
                 let game = Rc::new(RefCell::new(game_from_hash(hash)));
 
                 if new { // new game, never simulated
             // 1. try to find a solution from game simulation - if not already tried!
-                // TODO: skip simulation if already tried
                     match Worker::game_simulation(moves_ahead, game.clone(), p) {
                         GameState::Decided(verdict, mv) => { 
-                            return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+                            return Ok(GameState::Decided(verdict, mv));
                         },
-                        GameState::Locked => panic!("unexpected state at this state"),
                         GameState::Undecided => (),
+                        state => panic!("unexpected state at this state: {:?}", state),
                     }
                 }
 
             // 2. try to find a solution from the game store two moves ahead
                 match Worker::two_moves_ahead_inquiry(&game_store, hash, p) {
                     (GameState::Decided(verdict, mv),_) => { 
-                        return Worker::unlock_hash(&game_store, hash, GameState::Decided(verdict, mv));
+                        return Ok(GameState::Decided(verdict, mv));
                     },
-                    (GameState::Locked,_) => panic!("unexpected state at this state"),
                     (GameState::Undecided, interesting_hashes) => {
             // 3. claim interest for the remaining undecided games two moves ahead
                         // TODO: if necessary, defer the interesting hashes from the game simulation and not the two moves inquiry
                         //       should be more efficient!
                         Worker::claim_interests(interest, interesting_hashes, hash);
-                        return Worker::unlock_hash(&game_store, hash, GameState::Undecided);
+                        return Ok(GameState::Undecided);
                     },
+                    state => panic!("unexpected state at this state: {:?}", state),
                 }
             },
         }
     }
     fn lock_hash(
             game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
-            hash:GameHash) -> Result<bool,bool> {
+            hash:GameHash) -> Result<bool,String> {
 //print!("+-");
-        let mut gs = game_store.lock().unwrap();
+        let gs = game_store.lock().unwrap();
 //print!("-+");
         if let Some(record) = (*gs).get(&hash) {
             match &record.state {
-                GameState::Undecided => {
-                    (*gs).insert(hash, GameRecord { state: GameState::Locked, });
-// debug
-//println!("locked {}", hash);
-//
+                GameState::Novel => {
+                    return Ok(true);
+                },
+                GameState::Recall => {
                     return Ok(false);
-                },
-                GameState::Locked => {
-// debug
-//println!("cannot lock {}, it's locked", hash);
-//
-                    return Err(true);
-                },
-                GameState::Decided(_score, _mv) => {
-// debug
-//println!("cannot lock {}, it's {:?} with {:?}", hash, score, mv);
-//
-                    return Err(false);
-                },
+                }
+                gamestate => {
+                    return Err(format!("state {:?} not expected in Worker", gamestate));
+                }
             }
         } else {
-// debug
-//println!("new record {}", hash);
-//
-            (*gs).insert(hash, GameRecord { state: GameState::Locked, });
-            return Ok(true);
-        }
-    }
-    fn unlock_hash(
-            game_store:&Arc<Mutex<HashMap<GameHash,GameRecord>>>,
-            hash:GameHash,
-            state:GameState) {
-//print!("+-");
-        let mut gs = game_store.lock().unwrap();
-//print!("-+");
-        match state {
-            GameState::Locked => panic!("must unlock {}", hash),
-            _ => (),
-        }
-        if let Some(record) = (*gs).get(&hash) {
-            match record.state {
-                GameState::Locked => {
-                    (*gs).insert(hash, GameRecord{ state: state, });
-                },
-                _ => panic!("{} should be locked!", hash),
-            }
-        } else {
-            panic!("{} should have a record!", hash);
+           return Err(String::from("there should be a record"));
         }
     }
 
@@ -776,16 +797,21 @@ thread::spawn(move|| {
 // debug
 //println!("job for {}: {}", wid, hash);
 //
-                Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p);
-                match interest.send(Interest{
-                    interested: Some(hash), interesting: None, worker_id: Some(wid),
-                }) {
-                    Err(_e) => (),
+                if let Ok(verdict) = Worker::do_the_job(&game_store, moves_ahead, &interest, hash, &p) {
+                    match interest.send(Interest{
+                        interested: Some(hash), interesting: None, worker_id: Some(wid), record: Some(verdict),
+                    }) {
+                        Err(_e) => (),
 //debug
 //println!("cannot declare job done ({}). conductor has left the building?", _e),
 //
-                    Ok(_) => (),
-                };
+                        Ok(_) => (),
+                    };
+                } else {
+//debug
+panic!("job finished badly");
+//
+                }
 
 // debug
 //println!("done by {}: {}", wid, hash);
