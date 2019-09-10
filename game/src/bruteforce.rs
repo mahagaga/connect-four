@@ -681,9 +681,11 @@ impl Worker {
                     Score::Undecided(_) => unsafe {
                         let now = Instant::now();
                         let took = now.duration_since(then).as_millis();
+//println!("{} {}", LIMIT, took);
                         if took >= LIMIT { return GameState::Undecided; }
                         else {
                             depth += 1;
+//println!("{}", depth);
                             then = Instant::now();
                         }
                     },
