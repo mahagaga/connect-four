@@ -120,15 +120,13 @@ pub trait Strategy<T,S> {
         }
 
         let mut undecided_option: Option<Rc<dyn Move<T>>> = None;
-        let mut undecided_pv = -1.0;
+        let mut undecided_pv = std::f32::MIN;
         for (undecided, pv) in still_undecided {
             if game_evaluation {
                 match self.evaluate_move(Rc::clone(&g), p, Rc::clone(&undecided)) {
                     Ok(ev) => if ev > undecided_pv {
-                        if ev > undecided_pv {
-                            undecided_option = Some(undecided);
-                            undecided_pv = ev;
-                        }
+                        undecided_option = Some(undecided);
+                        undecided_pv = ev;
                     },
                     Err(e) => println!("what's wrong with {:?}: {:?}", undecided.display(), e),
                 }
@@ -162,7 +160,10 @@ pub trait Strategy<T,S> {
             }
         }
         if let Some((lost, in_n)) = latest_possible { return (Some(lost), Some(Score::Lost(in_n))); }
-        (None, None)
+//5: not clear what to do about this...
+/*5*/panic!("what?");
+//5:
+//:5        (None, None)
     }
 }
 

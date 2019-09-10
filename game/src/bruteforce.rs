@@ -693,7 +693,7 @@ impl Worker {
                 },
                 (_,_) => {
 //3:
-/*3*/ println!("no move!");
+/*3*/ println!("no move!\n{}", g.borrow().display());
 //3:
                     return GameState::Undecided;
                 },
