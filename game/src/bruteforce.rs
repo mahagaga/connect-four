@@ -606,7 +606,11 @@ impl Worker {
                                                             }
                                                             _ => { anti_open_moves.push(hash); },
                                                         }
-                                                    } else { anti_open_moves.push(hash); }
+                                                    } else { 
+                                                        // TODO: hash has no record yet
+                                                        // for saving memory one could filter Undecided by find_best_move(  ,2 steps ahead,  )
+                                                        anti_open_moves.push(hash);
+                                                    }
                                                 },
                                             };
                                             cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
@@ -676,7 +680,7 @@ impl Worker {
         let mut depth = moves_ahead;
         let mut then = Instant::now();
         loop {
-            match cfs.find_best_move(g.clone(),p,depth,true) {
+            match cfs.find_best_move(g.clone(),p,depth,false) {
                 (Some(mv), Some(score)) => match score {
                     Score::Undecided(_) => unsafe {
                         let now = Instant::now();

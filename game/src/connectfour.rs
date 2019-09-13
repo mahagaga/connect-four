@@ -319,6 +319,8 @@ impl ConnectFour {
         let killer = |x:&Option<Player>| -> bool {
             match x {
                 None => false,
+                // if this was mine, it'll fail anyways, if it was theirs - stop!
+                Some(Player::Gray) => { true },
                 Some(color) => {
                     if color == tabu { true }
                     else { false }
