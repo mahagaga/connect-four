@@ -500,7 +500,7 @@ thread::spawn(move|| {
                         let worker = workers.get_mut(wid).unwrap();
                         match worker.job_box.send((interesting, player.clone())) {
                             Err(_e) => println!("cannot submit new job to {} ({}). worker has quit?", worker.id, _e),
-                            Ok(_) => (),
+                            Ok(_) => (),//println!("submitted new job {} to {}", interesting, worker.id),
                         };
                         worker.pending_jobs += 1;
                     }
@@ -612,11 +612,11 @@ impl Worker {
                                                         // for saving memory filter Undecided by find_best_move(  ,2 steps ahead,  )
                                                         // TODO: cloning is inefficient. Rearrange the whole function and use Rc<RefCell<>> from the start.
                                                         let cfc = cf.clone();
-println!("uh-oh {}", cfc.display());
+//println!("uh-oh {}", cfc.display());
                                                         let cfr =  Rc::new(RefCell::new(cfc));
                                                         match cfs.find_best_move(cfr,p,2,false) {
                                                             (Some(mv), Some(score)) => {
-                                                                println!("{:?} {:?}", mv.data(), score);
+//println!("{:?} {:?}", mv.data(), score);
                                                                 match score {
                                                                Score::Lost(in_n) => { // opponent can reach a lost game: losing
                                                                     doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
