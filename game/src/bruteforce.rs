@@ -578,6 +578,7 @@ impl Worker {
                                     let anti_score = cf.make_shading_move(p.opponent(), Rc::clone(&anti_mv));
                                     match anti_score {
                                         Ok((score,grayed_two)) => {
+                                            let mut check_twice = false;
                                             match score {
                                                 Score::Won(in_n) => { // opponent has a winning move: losing
                                                     doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
@@ -607,34 +608,37 @@ impl Worker {
                                                             }
                                                             _ => { anti_open_moves.push(hash); },
                                                         }
-                                                    } else { 
-                                                        // hash has no record yet
-                                                        // for saving memory filter Undecided by find_best_move(  ,2 steps ahead,  )
-                                                        // TODO: cloning is inefficient. Rearrange the whole function and use Rc<RefCell<>> from the start.
-                                                        let cfc = cf.clone();
-//println!("uh-oh {}", cfc.display());
-                                                        let cfr =  Rc::new(RefCell::new(cfc));
-                                                        match cfs.find_best_move(cfr,p,2,false) {
-                                                            (Some(mv), Some(score)) => {
-//println!("{:?} {:?}", mv.data(), score);
-                                                                match score {
-                                                               Score::Lost(in_n) => { // opponent can reach a lost game: losing
-                                                                    doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
-                                                                    cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
-                                                                    anti_won = true;
-                                                                    break;
-                                                                },
-                                                                Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
-                                                                Score::Won(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
-                                                                Score::Undecided(_) => { anti_open_moves.push(hash); },
-                                                            }},
-                                                            (_,_) => {
-                                                                panic!("no move!\n{}", cf.display());
-                                                            },
-                                                        };
+                                                    } else {
+                                                        check_twice = true;
                                                     }
                                                 },
                                             };
+                                            if check_twice {
+                                                // hash has no record yet
+                                                // for saving memory filter Undecided by find_best_move(  ,2 steps ahead,  )
+                                                // TODO: cloning is inefficient. Rearrange the whole function and use Rc<RefCell<>> from the start.
+                                                let cfc = cf.clone();
+//println!("uh-oh {}", cfc.display());
+                                                let cfr =  Rc::new(RefCell::new(cfc));
+                                                match cfs.find_best_move(cfr,p,2,false) {
+                                                    (Some(mv), Some(score)) => {
+//println!("{:?} {:?}", mv.data(), score);
+                                                        match score {
+                                                        Score::Lost(in_n) => { // opponent can reach a lost game: losing
+                                                            doomed_moves.push((Score::Lost(in_n+2), mv.data().clone()));
+                                                            cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
+                                                            anti_won = true;
+                                                            break;
+                                                        },
+                                                        Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
+                                                        Score::Won(in_n) => { anti_doomed_moves.push((Score::Lost(in_n+1), mv.data().clone())); },
+                                                        Score::Undecided(_) => { anti_open_moves.push(hash_from_state(cf.state())); },
+                                                    }},
+                                                    (_,_) => {
+                                                        panic!("no move!\n{}", cf.display());
+                                                    },
+                                                };
+                                            }
                                             cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
                                         },
                                         Err(_) => panic!("unexpected error in anti move"),
