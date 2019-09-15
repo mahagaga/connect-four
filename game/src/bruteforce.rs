@@ -7,8 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
 use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread;
-use std::time::Duration;
-
+use std::time::{Duration,Instant};
 
 //#################################################################################################
 // specifically Connect Four
@@ -203,6 +202,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
     }
 }
 pub static STRDMP: &str  = "strdmp";
+pub static mut LIMIT: u128 = 0;
 
 impl BruteForceStrategy {
     pub fn new(nworkers:usize) -> Self {
@@ -606,7 +606,11 @@ impl Worker {
                                                             }
                                                             _ => { anti_open_moves.push(hash); },
                                                         }
-                                                    } else { anti_open_moves.push(hash); }
+                                                    } else { 
+                                                        // TODO: hash has no record yet
+                                                        // for saving memory one could filter Undecided by find_best_move(  ,2 steps ahead,  )
+                                                        anti_open_moves.push(hash);
+                                                    }
                                                 },
                                             };
                                             cf.withdraw_move_unshading(p.opponent(), Rc::clone(&anti_mv), grayed_two);
@@ -673,12 +677,31 @@ impl Worker {
 // debug
 //println!("{}\n{}\n{}", g.borrow().display(), moves_ahead, p);
 //
-        match cfs.find_best_move(g,p,moves_ahead,true) {
-            (Some(mv), Some(score)) => match score {
-                Score::Undecided(_) => GameState::Undecided,
-                score => GameState::Decided(score, Some(mv.data().clone())),
-            },
-            (_,_) => GameState::Undecided,
+        let mut depth = moves_ahead;
+        let mut then = Instant::now();
+        loop {
+            match cfs.find_best_move(g.clone(),p,depth,false) {
+                (Some(mv), Some(score)) => match score {
+                    Score::Undecided(_) => unsafe {
+                        let now = Instant::now();
+                        let took = now.duration_since(then).as_millis();
+//println!("{} {}", LIMIT, took);
+                        if took >= LIMIT { return GameState::Undecided; }
+                        else {
+                            depth += 1;
+//println!("{}", depth);
+                            then = Instant::now();
+                        }
+                    },
+                    score => return GameState::Decided(score, Some(mv.data().clone())),
+                },
+                (_,_) => {
+//3:
+/*3*/ println!("no move!\n{}", g.borrow().display());
+//3:
+                    return GameState::Undecided;
+                },
+            }
         }
     }
 
