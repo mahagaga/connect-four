@@ -392,7 +392,11 @@ impl ConnectFour {
         true
     }
 
-    pub fn make_shading_move(&mut self, p: &Player, mv: Rc<dyn Move<Column>>) -> Result<(Score, Vec<(usize,usize)>), Withdraw> {
+    pub fn make_shading_move(
+            &mut self, 
+            p: &Player, 
+            mv: Rc<dyn Move<Column>>
+        ) -> Result<(Score, Vec<(usize,usize)>), Withdraw> {
         let n = mv.data().to_usize();
         let m = self.field[n].len();
         if ConnectFour::height() == m {
@@ -405,6 +409,9 @@ impl ConnectFour {
                 Player::Black => Some(Player::Black),
                 Player::Gray => Some(Player::Gray),                
             });
+
+            // TODO: gray this very stone too if dropped onto a dead position,
+            // but no need to include it in the result, it'll be removed when it comes to unshading
 
             let grayable = self.get_influence_range(n,m)
                 .into_iter()
