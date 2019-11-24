@@ -1,66 +1,66 @@
-game 42502451267743730655232 state Decided(Won(2), Some(Three))
+game 42502451277639335317654 state Decided(Won(4), Some(Two))
 ------
+xoox
+ox
 
-xo
-
-xo
+xoox
 
 o
 ox
 ------
 option One
-- stored winner in 0: One -> 42502451267743730655238
-- stored winner in 0: Two -> 42502451267743730720770
-- stored undecided (Undecided) Three -> 42502451267743747432450
-- stored winner in 0: Four -> 42502451268843242283010
-- stored winner in 0: Five -> 42502451549218707365890
-- stored winner in 0: Six -> 42507062953762158043138
-- stored winner in 0: Seven -> 118060314993658054074370
+- unrecorded One -> 42502451277639335319190
+- unrecorded Two -> 42502451277639335383702
+- unrecorded Three -> 42502451277639352095382
+- unrecorded Four -> 42502451295231521362838
+- unrecorded Five -> 42502451559114312028822
+- unrecorded Six -> 42507062963657762706070
+- unrecorded Seven -> 118060315003553658737302
 option Two
-- stored undecided (Undecided) One -> 42502451267743730786305
-- stored undecided (Undecided) Two -> 42502451267743731048448
-- stored undecided (Undecided) Three -> 42502451267743747563520
-- stored undecided (Undecided) Four -> 42502451268843242414080
-- stored undecided (Undecided) Five -> 42502451549218707496960
-- stored undecided (Undecided) Six -> 42507062953762158174208
-- stored undecided (Undecided) Seven -> 118060314993658054205440
+- unrecorded One -> 42502451277639335448990
+- unrecorded Two -> 42502451277639335710878
+- unrecorded Three -> 42502451277639352225950
+- unrecorded Four -> 42502451295231521493150
+- unrecorded Five -> 42502451559114312159390
+- unrecorded Six -> 42507062963657762836638
+- unrecorded Seven -> 118060315003553658867870
 option Three
-- stored winner in 0: One -> 42502451267743764209665
-- stored winner in 0: Two -> 42502451267743764275200
-- stored winner in 0: Three -> 42502451267743831318528
-- stored winner in 0: Four -> 42502451268843275837440
-- stored winner in 0: Five -> 42502451549218740920320
-- stored winner in 0: Six -> 42507062953762191597568
-- stored winner in 0: Seven -> 118060314993658087628800
+- unrecorded One -> 42502451277639368872342
+- unrecorded Two -> 42502451277639368937622
+- unrecorded Three -> 42502451277639452758166
+- unrecorded Four -> 42502451295231554916502
+- unrecorded Five -> 42502451559114345582742
+- unrecorded Six -> 42507062963657796259990
+- unrecorded Seven -> 118060315003553692291222
 option Four
-- stored undecided (Undecided) One -> 42502451269942753910785
-- stored undecided (Undecided) Two -> 42502451269942753976320
-- stored undecided (Undecided) Three -> 42502451269942770688000
-- stored undecided (Undecided) Four -> 42502451274340800421888
-- stored undecided (Undecided) Five -> 42502451551417730621440
-- stored undecided (Undecided) Six -> 42507062955961181298688
-- stored undecided (Undecided) Seven -> 118060314995857077329920
+- unrecorded One -> 42502451312823707406750
+- unrecorded Two -> 42502451312823707472030
+- unrecorded Three -> 42502451312823724183710
+- unrecorded Four -> 42502451383192451584158
+- unrecorded Five -> 42502451594298684117150
+- unrecorded Six -> 42507062998842134794398
+- unrecorded Seven -> 118060315038738030825630
 option Five
-- stored winner in 0: One -> 42502451830693684076545
-- stored winner in 0: Two -> 42502451830693684142080
-- stored undecided (Undecided) Three -> 42502451830693700853760
-- stored winner in 0: Four -> 42502451831793195704320
-- stored winner in 0: Five -> 42502452956593590919168
-- stored winner in 0: Six -> 42507063516712111464448
-- stored winner in 0: Seven -> 118060315556608007495680
+- unrecorded One -> 51947184806328579166614
+- unrecorded Two -> 51947184806328579231894
+- unrecorded Three -> 51947184806328595943574
+- unrecorded Four -> 51947184823920765210774
+- unrecorded Five -> 51947186213703462719638
+- unrecorded Six -> 51951796492347006554262
+- unrecorded Seven -> 127505048532242902585494
 option Six
-- stored undecided (Undecided) One -> 51956407605519875858433
-- stored undecided (Undecided) Two -> 51956407605519875923968
-- stored undecided (Undecided) Three -> 51956407605519892635648
-- stored undecided (Undecided) Four -> 51956407606619387486208
-- stored undecided (Undecided) Five -> 51956407886994852569088
-- stored undecided (Undecided) Six -> 51974854349593585410048
-- stored undecided (Undecided) Seven -> 127514271331434199277568
+- unrecorded One -> 51956407615415480521110
+- unrecorded Two -> 51956407615415480586390
+- unrecorded Three -> 51956407615415497298070
+- unrecorded Four -> 51956407633007666565270
+- unrecorded Five -> 51956407896890457231510
+- unrecorded Six -> 51974854359489190072470
+- unrecorded Seven -> 127514271341329803939990
 option Seven
-- stored undecided (Undecided) One -> 193618178719572377493505
-- stored undecided (Undecided) Two -> 193618178719572377559040
-- stored undecided (Undecided) Three -> 193618178719572394270720
-- stored undecided (Undecided) Four -> 193618178720671889121280
-- stored undecided (Undecided) Five -> 193618179001047354204160
-- stored undecided (Undecided) Six -> 193622790405590804881408
-- stored undecided (Undecided) Seven -> 495849633623229671170048
+- unrecorded One -> 203062911695207272583574
+- unrecorded Two -> 203062911695207272648854
+- unrecorded Three -> 203062911695207289360534
+- unrecorded Four -> 203062911712799458627734
+- unrecorded Five -> 203062911976682249293974
+- unrecorded Six -> 203067523381225699971222
+- unrecorded Seven -> 505294366598864566259862
