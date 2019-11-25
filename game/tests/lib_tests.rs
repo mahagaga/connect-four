@@ -541,19 +541,19 @@ o
 #[test]
 fn test_graying_1() {
     let expected_before_move_six ="------
+xoox
+ox
 
-xo
-
-xo
+xoox
 
 o
 ox
 ------";
     let expected_after_move_six = "------
+xoox
+ox
 
-xo
-
-xo
+xoox
 
 ox
 :x
@@ -566,7 +566,7 @@ ox
     let hash = hash_from_state(mg.state());
     let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_six).state());
     assert!(hash == expected_hash);
-    assert!(hash == 51956407605519875858432, "{} is not 51956407605519875858432", hash);
+    assert!(hash == 51956407615415480520854, "{} is not 51956407615415480520854", hash);
 
     // undo
     mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }), grayed);
@@ -575,7 +575,7 @@ ox
     let hash = hash_from_state(mg.state());
     let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_six).state());
     assert!(hash == expected_hash);
-    assert!(hash == 42502451267743730655232, "{} is not 42502451267743730655232", hash);
+    assert!(hash == 42502451277639335317654, "{} is not 42502451277639335317654", hash);
 
     // at last check shading in action
     let g = Rc::new(RefCell::new(game.clone()));
@@ -587,17 +587,18 @@ ox
  
     match strategy.find_best_move(g.clone(), &player, toplimit, true) {
         (Some(mv), Some(score)) => {
-            assert!(Column::Three == *mv.data());
-            if let Score::Won(n) = score { assert!(n == 2); }
+            assert!(Column::Two == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 4); }
             else { assert!(false); }
 
             let dump = std::fs::read_to_string(STRDMP).unwrap();
             let expected = std::fs::read_to_string("tests/data/shading").unwrap();
-            assert!(dump == expected, dump);
+            assert!(dump == expected,
+                std::fs::write("tests/data/shading~", dump).unwrap()
+            );
         },
         _ => { assert!(false); },
     };
-
 }
 
 #[test]
