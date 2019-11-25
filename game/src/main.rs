@@ -10,12 +10,15 @@ use std::cell::RefCell;
 use std::env;
 
 fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player) -> u64 {
-    let strategy = BruteForceStrategy::new(nworker);
     let g = Rc::new(RefCell::new(game.clone()));
 
     let then = Instant::now();
 
-    match strategy.find_best_move(g.clone(), player, toplimit, true) {
+    let result = match nworker {
+        0 => ConnectFourStrategy::default().find_best_move(g.clone(), player, toplimit, true),
+        n => BruteForceStrategy::new(n).find_best_move(g.clone(), player, toplimit, true),    
+    };
+    match result {
         (Some(mv), Some(score)) => {
             println!("{:?} {:?}", mv.data(), score);
         },
