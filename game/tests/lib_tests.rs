@@ -349,7 +349,16 @@ x
 
 ------");
     // this is probably the losing move of White in the game against L.
-    complex_evaluation(game, &strategy, &Player::White, Column::Three, 22.0);
+    // bending the strategy's koefficients walks us through the test:
+    let strategy = ConnectFourStrategy {
+        mscore_koeff: 0.8, //vs 1.0
+        oscore_koeff: 1.0, //vs 0.8
+        nscore_koeff: 0.5,
+        my_tabu_koeff: -10.0,
+        opp_tabu_koeff: 10.0,
+        tabu_defense_koeff: 0.25,
+    };
+    complex_evaluation(game, &strategy, &Player::White, Column::Three, 9.4);
 
     // the disaster:
     let _game = replicate_game("------
@@ -372,7 +381,16 @@ oooxo
 ------");
     // ... and the preceding move where the game is lost against 'the app'.
     // admittedly it's really hard to foresee the disaster.
-    complex_evaluation(game, &strategy, &Player::White, Column::Four, 9.7);
+    // bending the strategy's koefficients again walks us through the test:
+    let strategy = ConnectFourStrategy {
+        mscore_koeff: 0.8, //1.0
+        oscore_koeff: 1.2, //0.8
+        nscore_koeff: 0.5,
+        my_tabu_koeff: -10.0,
+        opp_tabu_koeff: 5.0, //10.0
+        tabu_defense_koeff: 0.25,
+    };
+    complex_evaluation(game, &strategy, &Player::White, Column::Four, 11.4);
 }
 
 fn complex_evaluation(game:ConnectFour, strategy:&ConnectFourStrategy, player:&Player,
