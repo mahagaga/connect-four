@@ -590,9 +590,7 @@ impl Worker {
                                                 Score::Remis(in_n) => { anti_draw_moves.push((Score::Remis(in_n+1), mv.data().clone())); },
                                                 Score::Undecided(_) => { // unclear from the bord: check game store
                                                     let hash = hash_from_state(cf.state());
-        //print!("+.");
                                                     let gs = game_store.lock().unwrap();
-        //print!(".+");
                                                     if let Some(record) = (*gs).get(&hash) {
                                                         match &record.state {
                                                             GameState::Decided(record_score,_) => match record_score {

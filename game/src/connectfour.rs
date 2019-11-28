@@ -410,9 +410,13 @@ impl ConnectFour {
                 Player::Gray => Some(Player::Gray),                
             });
 
-            // TODO: gray this very stone too if dropped onto a dead position,
+            // gray this very stone too if dropped onto a dead position,
             // but no need to include it in the result, it'll be removed when it comes to unshading
+            if self.is_dead(&n, &m, p.opponent()) {
+                self.field[n][m] = Some(Player::Gray);
+            }
 
+            // gray opponent's grayable stones
             let grayable = self.get_influence_range(n,m)
                 .into_iter()
                 // prefilter by color - smart?
