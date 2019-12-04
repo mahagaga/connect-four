@@ -5,7 +5,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Debug, Clone)]
 pub enum Player {
     Black,
     White,

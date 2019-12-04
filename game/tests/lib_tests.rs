@@ -510,22 +510,24 @@ fn test_bruteforce() {
     
     let game = ConnectFour::replicate_game("------
 
-x
 
-xo
+oxox
 
-o
+oxox
+xo:x
 
 ------");
 
     // with some wisdom
     let g = Rc::new(RefCell::new(game.clone()));
     let toplimit = 4;
-    
+    let (h,s) = hash_from_state(g.clone().borrow().state());
+    assert!((h,s) == (209874779512449794048, false), "{} is not 209874779512449794048", h);
     match strategy.find_best_move(g.clone(), &player, toplimit, true) {
         (Some(mv), Some(score)) => {
-            assert!(Column::Three == *mv.data());
-            if let Score::Won(n) = score { assert!(n == 2); }
+            println!("{:?}", *mv.data());
+            assert!(Column::Four == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 4); }
             else { assert!(false); }
 
             let dump = std::fs::read_to_string(STRDMP).unwrap();
@@ -542,14 +544,74 @@ o
 
     match strategy.find_best_move(g.clone(), &player, toplimit, true) {
         (Some(mv), Some(score)) => {
-            assert!(Column::Three == *mv.data());
-            if let Score::Won(n) = score { assert!(n == 2); }
+            assert!(Column::Four == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 4); }
             else { assert!(false); }
 
             let dump = std::fs::read_to_string(STRDMP).unwrap();
             let expected = std::fs::read_to_string("tests/data/toplimit0").unwrap();
             assert!(dump == expected,
                 std::fs::write("tests/data/toplimit0~", dump).unwrap()
+            );
+        },
+        _ => { assert!(false); },
+    };
+}
+
+#[test]
+fn test_bruteforce_2() {
+
+    let nworker = 1;
+    let player = Player::Black;
+
+    let strategy = BruteForceStrategy::new(nworker);
+    
+    let game = ConnectFour::replicate_game("------
+
+o
+
+xo
+
+x
+
+------");
+
+    // with some wisdom
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 4;
+    let (h,s) = hash_from_state(g.clone().borrow().state());
+    assert!((h,s) == (2305843421530558464, false));
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?}", *mv.data());
+            assert!(Column::Five == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit4_2").unwrap();
+            assert!(dump == expected,
+                    std::fs::write("tests/data/toplimit4_2~", dump));
+        },
+        _ => { assert!(false); },
+    };
+
+    // with no wisdom
+    // but - alas! - even no wisdom involves a two steps ahead inquiry
+    // explaining the sameness of files toplimit0 and toplimit4
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Five == *mv.data());
+            if let Score::Won(n) = score { assert!(n == 2); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/toplimit0_2").unwrap();
+            assert!(dump == expected,
+                std::fs::write("tests/data/toplimit0_2~", dump).unwrap()
             );
         },
         _ => { assert!(false); },
@@ -581,19 +643,21 @@ ox
     let (_score,grayed) = mg.make_shading_move(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six })).unwrap();
     assert!(mg.display().eq(expected_after_move_six), mg.display());
    
-    let hash = hash_from_state(mg.state());
-    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_after_move_six).state());
+    let (hash, swapped) = hash_from_state(mg.state());
+    let (expected_hash, eswapped) = hash_from_state(ConnectFour::replicate_game(expected_after_move_six).state());
     assert!(hash == expected_hash);
-    assert!(hash == 51956407615415480520854, "{} is not 51956407615415480520854", hash);
+    assert!(eswapped && swapped);
+    assert!(hash == 708365348734296165224459, "{} is not 708365348734296165224459", hash);
 
     // undo
     mg.withdraw_move_unshading(&Player::Black, Rc::new(ConnectFourMove { data: Column::Six }), grayed);
     assert!(mg.display().eq(expected_before_move_six), mg.display());
    
-    let hash = hash_from_state(mg.state());
-    let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_six).state());
+    let (hash, swapped) = hash_from_state(mg.state());
+    let (expected_hash, eswapped) = hash_from_state(ConnectFour::replicate_game(expected_before_move_six).state());
     assert!(hash == expected_hash);
-    assert!(hash == 42502451277639335317654, "{} is not 42502451277639335317654", hash);
+    assert!(eswapped && swapped);
+    assert!(hash == 708365348734296165191689, "{} is not 708365348734296165191689", hash);
 
     // at last check shading in action
     let g = Rc::new(RefCell::new(game.clone()));
@@ -605,7 +669,7 @@ ox
  
     match strategy.find_best_move(g.clone(), &player, toplimit, true) {
         (Some(mv), Some(score)) => {
-            assert!(Column::Two == *mv.data());
+            assert!(Column::Six == *mv.data());
             if let Score::Won(n) = score { assert!(n == 4); }
             else { assert!(false); }
 

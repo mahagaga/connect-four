@@ -134,6 +134,8 @@ enum Step {
 impl ConnectFour {
     pub fn width() -> usize { 7 }
     pub fn height() -> usize { 6 }
+    pub fn walkup() -> Vec<usize> { vec![0,1,2,3,4,5,6] }
+    pub fn walkdown() -> Vec<usize> { vec![6,5,4,3,2,1,0] }
     
     pub fn new() -> Self {
         let mut cf = ConnectFour{
@@ -434,7 +436,7 @@ impl ConnectFour {
                 .collect::<Vec<(usize,usize)>>();
 
             // turn them gray
-            let grayable = grayable.into_iter().map(|(a,b)| {
+            let grayed = grayable.into_iter().map(|(a,b)| {
                 self.field[a][b] = Some(Player::Gray);
                 (a,b)
             }).collect();
@@ -452,7 +454,7 @@ impl ConnectFour {
 //1:
             match s {
                 Err(withdraw) => Err(withdraw),
-                Ok(score) => Ok((score, grayable)),
+                Ok(score) => Ok((score, grayed)),
             }
         }
     }

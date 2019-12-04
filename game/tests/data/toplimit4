@@ -1,66 +1,67 @@
-game 1152921916923715584 state Decided(Won(2), Some(Three))
+game 209874779512449794048 state Decided(Won(4), Some(Four))
+game store has 1 records
 ------
 
-x
 
-xo
+oxox
 
-o
+oxox
+xo:x
 
 ------
-option One
-- unrecorded One -> 1152921916923715590
-- unrecorded Two -> 1152921916923731970
-- unrecorded Three -> 1152921916940492802
-- unrecorded Four -> 1152923016435343362
-- unrecorded Five -> 1153203391900426242
-- unrecorded Six -> 5764607935351103490
-- unrecorded Seven -> 4723519404786568929282
-option Two
-- unrecorded One -> 1152921916923748353
-- unrecorded Two -> 1152921916923813888
-- unrecorded Three -> 1152921916940525568
-- unrecorded Four -> 1152923016435376128
-- unrecorded Five -> 1153203391900459008
-- unrecorded Six -> 5764607935351136256
-- unrecorded Seven -> 4723519404786568962048
-option Three
-- unrecorded One -> 1152921916957270017
-- unrecorded Two -> 1152921916957286400
-- unrecorded Three -> 1152921917024378880
-- unrecorded Four -> 1152923016468897792
-- unrecorded Five -> 1153203391933980672
-- unrecorded Six -> 5764607935384657920
-- unrecorded Seven -> 4723519404786602483712
-option Four
-- unrecorded One -> 1152924115946971137
-- unrecorded Two -> 1152924115946987520
-- unrecorded Three -> 1152924115963748352
-- unrecorded Four -> 1152928513993482240
-- unrecorded Five -> 1153205590923681792
-- unrecorded Six -> 5764610134374359040
-- unrecorded Seven -> 4723519406985592184832
-option Five
-- unrecorded One -> 1153484866877136897
-- unrecorded Two -> 1153484866877153280
-- unrecorded Three -> 1153484866893914112
-- unrecorded Four -> 1153485966388764672
-- unrecorded Five -> 1154610766783979520
-- unrecorded Six -> 5765170885304524800
-- unrecorded Seven -> 4723519967736522350592
-option Six
-- unrecorded One -> 10376293953778491393
-- unrecorded Two -> 10376293953778507776
-- unrecorded Three -> 10376293953795268608
-- unrecorded Four -> 10376295053290119168
-- unrecorded Five -> 10376575428755202048
-- unrecorded Six -> 28823038027488043008
-- unrecorded Seven -> 4732742776823423705088
-option Seven
-- unrecorded One -> 9445885887656214142977
-- unrecorded Two -> 9445885887656214159360
-- unrecorded Three -> 9445885887656230920192
-- unrecorded Four -> 9445885888755725770752
-- unrecorded Five -> 9445886169131190853632
-- unrecorded Six -> 9450497573674641530880
-- unrecorded Seven -> 28335351819134794997760
+9444776031413294817280      One	-> undecided from board
+33056608445761520885760     	One	-> undecided, no record
+9445928952917901664256      	Two	-> undecided, no record
+9444848089007332745216      	Three	-> undecided, no record
+9444776031482014294016      	Four	-> undecided, no record
+9444776031417589784576      	Five	-> undecided, no record
+9444776031413295865856      	Six	-> undecided, no record
+9444776031413294817281      	Seven	-> undecided, no record
+209874779512483356672       Two	-> undecided from board
+4724715954502816718848      	One	-> undecided, no record
+209874779512483373056       	Two	-> undecided, no record
+209874779516778323968       	Three	-> undecided, no record
+209874779581202833408       	Four	-> undecided, no record
+209946837106521284608       	Five	-> undecided, no record
+505022684691836182528       	Six	-> undecided, no record
+4932241262382128570368      	Seven	-> undecided, no record
+209874779521039728640       Three	-> undecided from board
+4722553663731725459456      	One	-> undecided, no record
+209874779521039732736       	Two	-> undecided, no record
+209874779538219597824       	Three	-> undecided, no record
+209874779589759205376       	Four	-> undecided, no record
+209946837115077656576       	Five	-> undecided, no record
+505022684700392554496       	Six	-> undecided, no record
+4932241262390684942336      	Seven	-> undecided, no record
+209874779649922301952       Four	-> undecided from board
+4722410111631041978368      	One	-> undecided, no record
+209874779649922306048       	Two	-> undecided, no record
+209874779654217269248       	Three	-> undecided, no record
+209874779924800208896       	Four	-> undecided, no record
+209946837243960229888       	Five	-> undecided, no record
+505022684829275127808       	Six	-> undecided, no record
+4932241262519567515648      	Seven	-> undecided, no record
+210018894700525649920       Five	-> undecided from board
+4722409548552239538176      	One	-> undecided, no record
+210018894700525654016       	Two	-> undecided, no record
+210018894704820617216       	Three	-> undecided, no record
+210018894769245126656       	Four	-> undecided, no record
+210307125076677361664       	Five	-> undecided, no record
+1095462610238584127488      	Six	-> undecided, no record
+4932385377570170863616      	Seven	-> undecided, no record
+800170589871155445760       Six	-> undecided from board
+4722409548543651700736      	One	-> undecided, no record
+800170589871155449856       	Two	-> undecided, no record
+800170589875450413056       	Three	-> undecided, no record
+800170589939874922496       	Four	-> undecided, no record
+800242647465193373696       	Five	-> undecided, no record
+1980762210588566749184      	Six	-> undecided, no record
+5522537072740800659456      	Seven	-> undecided, no record
+9654607745251740221440      Seven	-> undecided from board
+9654607745251740221441      	One	-> undecided, no record
+9654607745251740225536      	Two	-> undecided, no record
+9654607745256035188736      	Three	-> undecided, no record
+9654607745320459698176      	Four	-> undecided, no record
+9654679802845778149376      	Five	-> undecided, no record
+9949755650431093047296      	Six	-> undecided, no record
+33266440159599966289920     	Seven	-> undecided, no record
