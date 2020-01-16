@@ -236,6 +236,7 @@ impl Strategy<Column,Vec<Vec<Option<Player>>>> for BruteForceStrategy {
 }
 pub static STRDMP: &str  = "strdmp";
 pub static mut LIMIT: u128 = 0;
+pub static mut BASICALLY_OVER: usize = 30;
 
 impl BruteForceStrategy {
     pub fn new(nworkers:usize) -> Self {
@@ -626,7 +627,7 @@ impl Worker {
                         Score::Undecided(_) => {
                             let anti_options = cf.possible_moves(p.opponent());
                             if anti_options.is_empty() { // no possible moves left: stalemate
-                                draw_moves.push((Score::Remis(1), mv.data().clone())); ;
+                                draw_moves.push((Score::Remis(1), mv.data().clone()));
                             } else {
                                 let mut anti_draw_moves = Vec::<(Score,Column)>::new();
                                 let mut anti_doomed_moves = Vec::<(Score,Column)>::new();
@@ -844,7 +845,16 @@ impl Worker {
 
                 if new { // new game, never simulated
             // 1. try to find a solution from game simulation - if not already tried!
-                    match Worker::game_simulation(moves_ahead, game.clone(), p) {
+                    // once 30 or so stones were dropped, run simulation till the bitter end
+                    let moah = match game.clone().borrow().dropped_stones() {
+                        n => unsafe {
+                            if n >= BASICALLY_OVER {
+                                (ConnectFour::width() * ConnectFour::height() - BASICALLY_OVER) as i32
+                            } else { moves_ahead }
+                        }
+                    };
+
+                    match Worker::game_simulation(moah, game.clone(), p) {
                         GameState::Decided(verdict, mv) => { 
                             return Ok(GameState::Decided(verdict, mv));
                         },

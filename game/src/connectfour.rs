@@ -148,6 +148,10 @@ impl ConnectFour {
         cf
     }
 
+    pub fn dropped_stones(&self) -> usize {
+        self.field.iter().map(|c| { c.into_iter().filter(|x| { **x!=None })}.count()).sum()
+    }
+
     pub fn clone(&self) -> ConnectFour {
         let mut cf = ConnectFour{
             field: Vec::with_capacity(ConnectFour::width()),

@@ -1,5 +1,5 @@
 extern crate game;
-use game::bruteforce::{BruteForceStrategy,LIMIT};
+use game::bruteforce::{BruteForceStrategy,LIMIT,BASICALLY_OVER};
 use game::connectfour::*;
 use game::generic::*;
 
@@ -100,7 +100,8 @@ fn main() {
     let toplimit = default_int(args.get(4), 4) as i32;
     let game = read_game_from_file(args.get(1));
     unsafe {
-        LIMIT = default_int(args.get(5), 0) as u128;
+        BASICALLY_OVER = default_int(args.get(5), 30) as usize;
+        LIMIT = default_int(args.get(6), 0) as u128;
     }
     let player = match &args.get(2) {
         Some(p) =>  {

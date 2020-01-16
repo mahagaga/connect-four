@@ -720,3 +720,68 @@ o
     let expected_hash = hash_from_state(ConnectFour::replicate_game(expected_before_move_two).state());
     assert!(hash == expected_hash);
 }
+
+#[test]
+fn test_basically_over() {
+    let nworker = 1;
+    let player = Player::Black;
+
+    let strategy = BruteForceStrategy::new(nworker);
+    
+    let thirty_stones = "------
+:::xo
+:::ox
+:::xo
+:::ox
+:::xo
+:::ox
+:::xo
+------";
+
+    unsafe {
+        BASICALLY_OVER = 36;
+    }
+
+    let game = ConnectFour::replicate_game(thirty_stones);
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            println!("{:?}", mv.data());
+            assert!(Column::One == *mv.data());
+            if let Score::Remis(n) = score { assert!(n == 6); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/thirtyfivestones").unwrap();
+            assert!(dump == expected,
+                std::fs::write("tests/data/thirtyfivestones~", dump).unwrap()
+            );
+        },
+        _ => { assert!(false); },
+    };
+
+    unsafe {
+        BASICALLY_OVER = 30;
+    }
+
+    let game = ConnectFour::replicate_game(thirty_stones);
+    let g = Rc::new(RefCell::new(game.clone()));
+    let toplimit = 0;
+
+    match strategy.find_best_move(g.clone(), &player, toplimit, true) {
+        (Some(mv), Some(score)) => {
+            assert!(Column::Seven == *mv.data());
+            if let Score::Remis(n) = score { assert!(n == 6); }
+            else { assert!(false); }
+
+            let dump = std::fs::read_to_string(STRDMP).unwrap();
+            let expected = std::fs::read_to_string("tests/data/thirtystones").unwrap();
+            assert!(dump == expected,
+                std::fs::write("tests/data/thirtystones~", dump).unwrap()
+            );
+        },
+        _ => { assert!(false); },
+    };
+}
