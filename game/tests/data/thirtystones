@@ -1,0 +1,60 @@
+game 2111634660547409023070655 state Decided(Remis(6), Some(Seven))
+game store has 1 records
+------
+:::xo
+:::ox
+:::xo
+:::ox
+:::xo
+:::ox
+:::xo
+------
+2111634660547409023073215   One	-> undecided from board
+2111634660547409028317119   	Two	-> undecided, no record
+2111634678579417973260287   	Three	-> undecided, no record
+2111634660635369953296319   	Four	-> undecided, no record
+14200892874725709720318463  	Five	-> undecided, no record
+2113110400073305787202495   	Six	-> undecided, no record
+14200892856693701844923903  	Seven	-> undecided, no record
+2111634660556213714940863   Two	-> undecided from board
+2111634660556214789734399   	One	-> undecided, no record
+2111634678588222669321215   	Three	-> undecided, no record
+2111634660644174649357247   	Four	-> undecided, no record
+4531995219126684990566911   	Five	-> undecided, no record
+2113110400082110479070143   	Six	-> undecided, no record
+4531995201094677115172351   	Seven	-> undecided, no record
+2111634660547451972743615   Three	-> undecided from board
+2111634660547453047537151   	One	-> undecided, no record
+2111634660547451986375103   	Two	-> undecided, no record
+2111634660635430082834879   	Four	-> undecided, no record
+2111635399155358352536063   	Five	-> undecided, no record
+2111635381123349407592895   	Six	-> undecided, no record
+2111635381123350477141503   	Seven	-> undecided, no record
+2111782378764728947175871   Four	-> undecided from board
+2111782378764730021969407   	One	-> undecided, no record
+2111782378764728960807359   	Two	-> undecided, no record
+2111782396796772257100287   	Three	-> undecided, no record
+2111782396796772257100287   	Five	-> undecided, no record
+2111782378764728960807359   	Six	-> undecided, no record
+2111782378764730021969407   	Seven	-> undecided, no record
+2111634660547451972743615   Five	-> undecided from board
+2111635381123350477141503   	One	-> undecided, no record
+2111635381123349407592895   	Two	-> undecided, no record
+2111635399155358352536063   	Three	-> undecided, no record
+2111634660635430082834879   	Four	-> undecided, no record
+2111634660547451986375103   	Six	-> undecided, no record
+2111634660547453047537151   	Seven	-> undecided, no record
+2111634660556213714940863   Six	-> undecided from board
+4531995201094677115172351   	One	-> undecided, no record
+2113110400082110479070143   	Two	-> undecided, no record
+4531995219126684990566911   	Three	-> undecided, no record
+2111634660644174649357247   	Four	-> undecided, no record
+2111634678588222669321215   	Five	-> undecided, no record
+2111634660556214789734399   	Seven	-> undecided, no record
+2111634660547409023073215   Seven	-> undecided from board
+14200892856693701844923903  	One	-> undecided, no record
+2113110400073305787202495   	Two	-> undecided, no record
+14200892874725709720318463  	Three	-> undecided, no record
+2111634660635369953296319   	Four	-> undecided, no record
+2111634678579417973260287   	Five	-> undecided, no record
+2111634660547409028317119   	Six	-> undecided, no record
