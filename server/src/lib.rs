@@ -24,7 +24,7 @@ struct ConnectFourHandler {
     st: ConnectFourStrategy,
 }
 
-use hyper::header::AccessControlAllowOrigin;
+use iron::headers::AccessControlAllowOrigin;
 
 const STARTN:i32 = 6;
 const RESPITE:u128 = 400;
