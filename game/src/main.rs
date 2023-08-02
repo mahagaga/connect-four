@@ -9,14 +9,14 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::env;
 
-fn time_pondering(game:&ConnectFour, nworker:usize, toplimit:i32, player:&Player) -> u64 {
+fn time_pondering(game:&ConnectFour, nworker:usize, moves_ahead:i32, player:&Player) -> u64 {
     let g = Rc::new(RefCell::new(game.clone()));
 
     let then = Instant::now();
 
     let result = match nworker {
-        0 => ConnectFourStrategy::default().find_best_move(g.clone(), player, toplimit, true),
-        n => BruteForceStrategy::new(n).find_best_move(g.clone(), player, toplimit, true),    
+        0 => ConnectFourStrategy::default().find_best_move(g.clone(), player, moves_ahead, true),
+        n => BruteForceStrategy::new(n).find_best_move(g.clone(), player, moves_ahead, true),    
     };
     match result {
         (Some(mv), Some(score)) => {
@@ -97,7 +97,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let nworker = default_int(args.get(3), 3);
-    let toplimit = default_int(args.get(4), 4) as i32;
+    let moves_ahead = default_int(args.get(4), 4) as i32;
     let game = read_game_from_file(args.get(1));
     unsafe {
         BASICALLY_OVER = default_int(args.get(5), 30) as usize;
@@ -118,7 +118,7 @@ fn main() {
     let games = [game,];
     let _timep = games.iter()
     .map(|game| {
-        time_pondering(game, nworker, toplimit, &player)
+        time_pondering(game, nworker, moves_ahead, &player)
     })
     .map(|tp| {
         println!("ran with {} workers, it took {} seconds", nworker, tp);
